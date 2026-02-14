@@ -18,3 +18,4 @@ examples/
 guide/*
 !guide/formatting.md
 debug.log
+.env
