@@ -2,6 +2,8 @@
 
 Read any file in the terminal, rendered.
 
+![aster](hero.png)
+
 Markdown with colors and tables. Diffs with syntax highlighting. Images inline. JSON, JSONL transcripts, plain text. One binary, auto-detected.
 
 ## Install

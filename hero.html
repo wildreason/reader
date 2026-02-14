@@ -1,0 +1,198 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>aster</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;700&display=swap');
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    background: #1a1a2e;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    min-height: 100vh;
+    padding: 40px;
+  }
+
+  .window {
+    width: 720px;
+    background: #1e1e2e;
+    border-radius: 10px;
+    box-shadow:
+      0 0 0 1px rgba(255,255,255,0.06),
+      0 20px 60px rgba(0,0,0,0.5),
+      0 0 120px rgba(30,30,60,0.4);
+    overflow: hidden;
+  }
+
+  .titlebar {
+    height: 38px;
+    background: #181825;
+    display: flex;
+    align-items: center;
+    padding: 0 14px;
+    gap: 8px;
+    border-bottom: 1px solid rgba(255,255,255,0.04);
+  }
+
+  .dot { width: 12px; height: 12px; border-radius: 50%; }
+  .dot.red { background: #f38ba8; }
+  .dot.yellow { background: #f9e2af; }
+  .dot.green { background: #a6e3a1; }
+
+  .titlebar-text {
+    flex: 1;
+    text-align: center;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 12px;
+    color: #6c7086;
+    margin-right: 52px;
+  }
+
+  .terminal {
+    padding: 20px 24px 28px;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 13.5px;
+    line-height: 1.65;
+    color: #cdd6f4;
+  }
+
+  /* Header bar */
+  .header-bar {
+    background: #333333;
+    color: #fff;
+    padding: 2px 8px;
+    margin: 0 -24px 16px;
+    font-size: 13px;
+  }
+
+  /* Typography */
+  .h1 { color: #f9e2af; font-weight: 700; font-size: 15px; margin: 20px 0 8px; }
+  .h2 { color: #87ceeb; font-weight: 700; font-size: 14px; margin: 18px 0 6px; }
+  .bold { color: #ffd700; font-weight: 700; }
+  .code { color: #a0a0a0; }
+  .link { color: #89b4fa; }
+
+  /* Lists */
+  .list { margin: 3px 0; padding-left: 16px; }
+  .bullet { color: #89dceb; }
+
+  /* Code block - CSS borders */
+  .codeblock {
+    border: 1px solid #505050;
+    border-radius: 2px;
+    margin: 10px 0;
+    color: #707070;
+    font-size: 13px;
+    line-height: 1.5;
+  }
+  .codeblock-lang {
+    padding: 2px 10px;
+    border-bottom: 1px solid #505050;
+    font-size: 11px;
+    color: #606060;
+  }
+  .codeblock-body {
+    padding: 6px 12px;
+  }
+  .codeblock-body div {
+    white-space: pre;
+  }
+
+  /* Table - CSS borders */
+  table.term-table {
+    border-collapse: collapse;
+    margin: 10px 0;
+    font-size: 13px;
+    width: auto;
+  }
+  table.term-table th,
+  table.term-table td {
+    border: 1px solid #505050;
+    padding: 3px 12px;
+    text-align: left;
+    white-space: nowrap;
+  }
+  table.term-table th {
+    color: #87ceeb;
+    font-weight: 700;
+  }
+  table.term-table td {
+    color: #cdd6f4;
+  }
+  table.term-table td .code {
+    color: #a0a0a0;
+  }
+
+  .blank { height: 8px; }
+  .terminal > .h1:first-child { margin-top: 0; }
+</style>
+</head>
+<body>
+
+<div class="window">
+  <div class="titlebar">
+    <div class="dot red"></div>
+    <div class="dot yellow"></div>
+    <div class="dot green"></div>
+    <div class="titlebar-text">aster</div>
+  </div>
+  <div class="terminal">
+
+    <div class="header-bar">README.md</div>
+
+    <div class="h1">Getting Started</div>
+
+    <div>A terminal file reader that renders <span class="bold">markdown</span>, <span class="bold">diffs</span>, <span class="bold">images</span>, and <span class="bold">transcripts</span> inline.</div>
+
+    <div class="blank"></div>
+
+    <div class="h2">Installation</div>
+
+    <div class="codeblock">
+      <div class="codeblock-lang">bash</div>
+      <div class="codeblock-body">
+        <div>brew install wildreason/tap/aster</div>
+        <div>alias as=aster</div>
+      </div>
+    </div>
+
+    <div class="h2">Usage</div>
+
+    <div>Open any file and aster picks the right renderer:</div>
+
+    <div class="blank"></div>
+
+    <table class="term-table">
+      <tr><th>Command</th><th>What it does</th></tr>
+      <tr><td><span class="code">as file.md</span></td><td>Rendered markdown with colors</td></tr>
+      <tr><td><span class="code">as photo.png</span></td><td>Image inline in terminal</td></tr>
+      <tr><td><span class="code">as changes.diff</span></td><td>Syntax-highlighted diff</td></tr>
+      <tr><td><span class="code">as data.jsonl</span></td><td>Transcript viewer</td></tr>
+      <tr><td><span class="code">as pick</span></td><td>Choose from recent files</td></tr>
+    </table>
+
+    <div class="h2">Navigation</div>
+
+    <div>Scroll through documents with familiar keybindings:</div>
+
+    <div class="blank"></div>
+
+    <div class="list"><span class="bullet">-</span> <span class="code">j</span> / <span class="code">k</span> scroll down and up</div>
+    <div class="list"><span class="bullet">-</span> <span class="code">d</span> / <span class="code">u</span> half-page jumps</div>
+    <div class="list"><span class="bullet">-</span> <span class="code">g</span> / <span class="code">G</span> top and bottom</div>
+    <div class="list"><span class="bullet">-</span> <span class="code">q</span> quit</div>
+
+    <div class="blank"></div>
+
+    <div>Read more at <span class="link">github.com/wildreason/reader</span></div>
+
+  </div>
+</div>
+
+</body>
+</html>
