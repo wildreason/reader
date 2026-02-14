@@ -1,0 +1,20 @@
+# Claude Code settings (per-worktree, not project-wide)
+.claude/
+
+# Archive directory for old design docs
+archive/
+
+# Build artifacts
+/aster
+/dist/
+/bin/
+
+# Internal docs
+TODO.md
+
+# Data files
+*.csv
+examples/
+guide/*
+!guide/formatting.md
+debug.log

@@ -1,0 +1,66 @@
+# goreleaser config for aster
+# Run: goreleaser release --clean
+# Test: goreleaser check
+
+version: 2
+
+project_name: aster
+
+before:
+  hooks:
+    - go mod tidy
+
+builds:
+  - id: aster
+    main: .
+    binary: aster
+    env:
+      - CGO_ENABLED=0
+    goos:
+      - darwin
+      - linux
+    goarch:
+      - amd64
+      - arm64
+    ldflags:
+      - -s -w
+      - -X main.Version={{.Version}}
+      - -X main.Commit={{.ShortCommit}}
+      - -X main.Date={{.Date}}
+
+archives:
+  - id: default
+    formats: ['tar.gz']
+    name_template: >-
+      {{ .ProjectName }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}
+    files:
+      - LICENSE*
+      - README*
+
+checksum:
+  name_template: 'checksums.txt'
+
+changelog:
+  sort: asc
+  filters:
+    exclude:
+      - '^docs:'
+      - '^test:'
+      - '^chore:'
+
+homebrew_casks:
+  - name: aster
+    repository:
+      owner: wildreason
+      name: homebrew-tap
+      token: "{{ .Env.GITHUB_TOKEN }}"
+    homepage: "https://github.com/wildreason/reader"
+    description: "Terminal file reader. Markdown, JSONL, diffs, and more."
+    binary: aster
+
+release:
+  github:
+    owner: wildreason
+    name: reader
+  draft: false
+  prerelease: auto
