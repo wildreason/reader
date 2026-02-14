@@ -53,7 +53,7 @@ homebrew_casks:
     repository:
       owner: wildreason
       name: homebrew-tap
-      token: "{{ .Env.GITHUB_TOKEN }}"
+      token: "{{ .Env.HOMEBREW_TAP_TOKEN }}"
     homepage: "https://github.com/wildreason/reader"
     description: "Terminal file reader. Markdown, JSONL, diffs, and more."
     binary: aster
