@@ -40,6 +40,11 @@ func runReaderMode(blocks []Block, sourceName string, termWidth int, style strin
 
 	// Render all content at once
 	renderAll := func() {
+		if showLineNumbers {
+			SetLineNumbers(true, computeGutterWidth(blocks))
+		} else {
+			SetLineNumbers(false, 0)
+		}
 		content := renderAllContent(blocks, termWidth, borderStyle)
 		text.Clear()
 		fmt.Fprint(text, tview.TranslateANSI(content))

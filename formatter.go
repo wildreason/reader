@@ -134,6 +134,60 @@ func (br *BorderRenderer) GetContentIndent() int {
 	}
 }
 
+// annotatedLine pairs rendered text with its source line index
+type annotatedLine struct {
+	text       string
+	sourceLine int // 0-based index within page content, -1 for synthetic
+}
+
+var lineNumConfig struct {
+	enabled     bool
+	gutterWidth int
+}
+
+// SetLineNumbers enables or disables line number gutter
+func SetLineNumbers(enabled bool, gutterWidth int) {
+	lineNumConfig.enabled = enabled
+	lineNumConfig.gutterWidth = gutterWidth
+}
+
+// computeGutterWidth calculates gutter width from max line number across all blocks
+func computeGutterWidth(blocks []Block) int {
+	maxLine := 0
+	for _, b := range blocks {
+		if len(b.PageStartLine) == 0 {
+			continue
+		}
+		for p := 0; p < len(b.PageStartLine); p++ {
+			startLine := b.PageStartLine[p]
+			if p < len(b.Pages) {
+				pageLineCount := strings.Count(b.Pages[p], "\n") + 1
+				endLine := startLine + pageLineCount - 1
+				if endLine > maxLine {
+					maxLine = endLine
+				}
+			}
+		}
+	}
+	if maxLine == 0 {
+		return 0
+	}
+	digits := 0
+	for n := maxLine; n > 0; n /= 10 {
+		digits++
+	}
+	return digits + 1 // +1 for trailing space
+}
+
+// annotatedLinesToString converts annotated lines back to a plain string
+func annotatedLinesToString(lines []annotatedLine) string {
+	texts := make([]string, len(lines))
+	for i, al := range lines {
+		texts[i] = al.text
+	}
+	return strings.Join(texts, "\n")
+}
+
 // FormatBlockPage renders a specific page of a block with page indicator
 func FormatBlockPage(block *Block, pageNum int, termWidth int, borderStyle BorderStyle) string {
 	if block == nil {
@@ -169,14 +223,20 @@ func FormatBlockPage(block *Block, pageNum int, termWidth int, borderStyle Borde
 	// Create border renderer
 	renderer := NewBorderRenderer(borderStyle)
 
-	// Adjust content width based on border indent
-	contentWidth := termWidth - renderer.GetContentIndent()
+	// Compute gutter width for line numbers
+	gutterW := 0
+	if lineNumConfig.enabled && len(block.PageStartLine) > pageNum {
+		gutterW = lineNumConfig.gutterWidth
+	}
+
+	// Adjust content width based on border indent and gutter
+	contentWidth := termWidth - renderer.GetContentIndent() - gutterW
 	if !renderer.IsBoxStyle() {
 		contentWidth = contentWidth - 1 // Account for " " prefix added to non-box content lines
 	}
 
 	// Render markdown
-	rendered := formatMarkdown(pageContent, contentWidth)
+	annotatedLines := formatMarkdown(pageContent, contentWidth)
 
 	// Determine display name: use page-specific breadcrumb if available
 	displayName := block.Name
@@ -259,27 +319,40 @@ func FormatBlockPage(block *Block, pageNum int, termWidth int, borderStyle Borde
 		// No extra separator - go directly to content
 	}
 
-	// Render content lines
-	lines := strings.Split(rendered, "\n")
-	for _, line := range lines {
+	// Render content lines with optional line number gutter
+	for _, al := range annotatedLines {
+		line := al.text
 		isEmpty := (line == "")
+
+		// Build gutter string
+		gutter := ""
+		if gutterW > 0 {
+			if al.sourceLine >= 0 {
+				fileLineNum := block.PageStartLine[pageNum] + al.sourceLine
+				numStr := fmt.Sprintf("%d", fileLineNum)
+				gutter = "[#555555]" + strings.Repeat(" ", gutterW-1-len(numStr)) + numStr + " " + "[-]"
+			} else {
+				gutter = strings.Repeat(" ", gutterW)
+			}
+		}
+
 		if renderer.IsBoxStyle() {
 			// For box styles, wrap each line
 			if isEmpty {
-				output.WriteString("│" + strings.Repeat(" ", termWidth-2) + "│")
+				output.WriteString("│" + gutter + strings.Repeat(" ", termWidth-2-gutterW) + "│")
 			} else {
 				// Pad line to fit in box
 				if len(line) < contentWidth {
 					line = line + strings.Repeat(" ", contentWidth-len(line))
 				}
-				output.WriteString("│ " + line + " │")
+				output.WriteString("│ " + gutter + line + " │")
 			}
 		} else {
 			// For other styles, add left margin and use renderer
 			if isEmpty {
-				output.WriteString(renderer.RenderLine("", isEmpty))
+				output.WriteString(gutter + renderer.RenderLine("", isEmpty))
 			} else {
-				output.WriteString(" " + renderer.RenderLine(line, isEmpty))
+				output.WriteString(gutter + " " + renderer.RenderLine(line, isEmpty))
 			}
 		}
 		output.WriteString("\n")
@@ -382,20 +455,22 @@ func FormatDiffPage(block *Block, pageNum int, termWidth int, filename string) s
 
 // formatMarkdown performs lightweight markdown rendering
 // Handles: code blocks, tables, inline code, bold, italic, lists, links
-func formatMarkdown(text string, maxWidth int) string {
+// Returns annotated lines with source line mapping for line number gutter
+func formatMarkdown(text string, maxWidth int) []annotatedLine {
 	if maxWidth <= 0 {
 		maxWidth = 76 // Default
 	}
 
 	lines := strings.Split(text, "\n")
-	var result []string
+	var result []annotatedLine
 	inCodeBlock := false
 	var codeBlockLines []string
 	var codeBlockLanguage string
+	var fenceStartLine int
 	inTable := false
 	var tableLines []string
 
-	for _, line := range lines {
+	for lineIdx, line := range lines {
 		trimmed := strings.TrimSpace(line)
 
 		// Handle tables - detect lines with pipes (must check before code blocks)
@@ -413,7 +488,9 @@ func formatMarkdown(text string, maxWidth int) string {
 			if tableResult == nil {
 				tableResult = tableToList(tableLines)
 			}
-			result = append(result, tableResult...)
+			for _, tr := range tableResult {
+				result = append(result, annotatedLine{text: tr, sourceLine: -1})
+			}
 			inTable = false
 			tableLines = nil
 			// Fall through to process current line
@@ -425,12 +502,15 @@ func formatMarkdown(text string, maxWidth int) string {
 				// Starting code block - extract language if present
 				codeBlockLanguage = strings.TrimSpace(strings.TrimPrefix(trimmed, "```"))
 				codeBlockLines = []string{}
+				fenceStartLine = lineIdx
 				inCodeBlock = true
 			} else {
 				// Ending code block - render the code block with wrapper
 				codeBlock := renderCodeBlock(codeBlockLines, codeBlockLanguage, maxWidth)
-				result = append(result, codeBlock...)
-				result = append(result, "") // Empty line after code block
+				isBoxed := !containsBoxDrawing(codeBlockLines)
+				annotated := annotateCodeBlockResult(codeBlock, fenceStartLine, len(codeBlockLines), isBoxed, codeBlockLanguage != "")
+				result = append(result, annotated...)
+				result = append(result, annotatedLine{text: "", sourceLine: -1}) // Empty line after code block
 				inCodeBlock = false
 				codeBlockLines = nil
 			}
@@ -445,13 +525,21 @@ func formatMarkdown(text string, maxWidth int) string {
 
 		// Process regular markdown line
 		processed := processMarkdownLine(line, maxWidth)
-		result = append(result, processed...)
+		for i, p := range processed {
+			sl := -1
+			if i == 0 {
+				sl = lineIdx
+			}
+			result = append(result, annotatedLine{text: p, sourceLine: sl})
+		}
 	}
 
 	// Handle unclosed code block (edge case)
 	if inCodeBlock && len(codeBlockLines) > 0 {
 		codeBlock := renderCodeBlock(codeBlockLines, codeBlockLanguage, maxWidth)
-		result = append(result, codeBlock...)
+		isBoxed := !containsBoxDrawing(codeBlockLines)
+		annotated := annotateCodeBlockResult(codeBlock, fenceStartLine, len(codeBlockLines), isBoxed, codeBlockLanguage != "")
+		result = append(result, annotated...)
 	}
 
 	// Handle unclosed table (edge case)
@@ -460,10 +548,43 @@ func formatMarkdown(text string, maxWidth int) string {
 		if tableResult == nil {
 			tableResult = tableToList(tableLines)
 		}
-		result = append(result, tableResult...)
+		for _, tr := range tableResult {
+			result = append(result, annotatedLine{text: tr, sourceLine: -1})
+		}
 	}
 
-	return strings.Join(result, "\n")
+	return result
+}
+
+// annotateCodeBlockResult maps rendered code block lines back to source line indices
+func annotateCodeBlockResult(rendered []string, fenceStartLine int, numContent int, isBoxed bool, hasLanguage bool) []annotatedLine {
+	var result []annotatedLine
+	if len(rendered) == 0 {
+		return result
+	}
+
+	if isBoxed {
+		// Boxed: top border, content lines, bottom border
+		result = append(result, annotatedLine{text: rendered[0], sourceLine: -1})
+		for i := 1; i <= numContent && i < len(rendered); i++ {
+			result = append(result, annotatedLine{text: rendered[i], sourceLine: fenceStartLine + i})
+		}
+		if len(rendered) > numContent+1 {
+			result = append(result, annotatedLine{text: rendered[numContent+1], sourceLine: -1})
+		}
+	} else {
+		// Simple (ASCII art): optional language label, then content lines
+		offset := 0
+		if hasLanguage && len(rendered) > numContent {
+			result = append(result, annotatedLine{text: rendered[0], sourceLine: -1})
+			offset = 1
+		}
+		for i := 0; i < numContent && i+offset < len(rendered); i++ {
+			result = append(result, annotatedLine{text: rendered[i+offset], sourceLine: fenceStartLine + 1 + i})
+		}
+	}
+
+	return result
 }
 
 // renderCodeBlock renders a code block with visual wrapper

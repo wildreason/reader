@@ -30,8 +30,9 @@ type Block struct {
 	TotalPages  int
 	ContentType BlockContentType   // Default content type (for simple blocks)
 	PageTypes   []BlockContentType // Per-page content type (for mixed content blocks)
-	PageMeta    []string           // Per-page metadata (e.g., filename for diff pages)
-	SourceType  SourceType         // Track which parser created this block
+	PageMeta      []string           // Per-page metadata (e.g., filename for diff pages)
+	SourceType    SourceType         // Track which parser created this block
+	PageStartLine []int             // 1-indexed file line number for first content line of each page
 }
 
 // LinesPerPage is the fixed number of lines per page in e-reader mode
@@ -161,15 +162,22 @@ func (p *MarkdownParser) ParseContinuous(content string, termHeight int) []Block
 		lineIndex += linesPerPage
 	}
 
+	// Compute PageStartLine for line number display
+	pageStartLine := make([]int, len(pages))
+	for i := range pageStartLine {
+		pageStartLine[i] = 1 + i*linesPerPage
+	}
+
 	return []Block{{
-		Name:        pageMeta[0], // First page breadcrumb as block name
-		Content:     content,
-		LineNum:     0,
-		FullText:    content,
-		Pages:       pages,
-		TotalPages:  len(pages),
-		ContentType: BlockContentPlain,
-		PageMeta:    pageMeta, // Breadcrumb for each page
+		Name:          pageMeta[0], // First page breadcrumb as block name
+		Content:       content,
+		LineNum:       0,
+		FullText:      content,
+		Pages:         pages,
+		TotalPages:    len(pages),
+		ContentType:   BlockContentPlain,
+		PageMeta:      pageMeta, // Breadcrumb for each page
+		PageStartLine: pageStartLine,
 	}}
 }
 
@@ -192,15 +200,25 @@ func createBlock(header string, contentLines []string, lineNum int) Block {
 		pages = splitIntoPages(contentLines, LinesPerPage)
 	}
 
+	// Compute PageStartLine for line number display (skip diff blocks)
+	var pageStartLine []int
+	if contentType != BlockContentDiff {
+		pageStartLine = make([]int, len(pages))
+		for i := range pageStartLine {
+			pageStartLine[i] = lineNum + 2 + i*LinesPerPage
+		}
+	}
+
 	return Block{
-		Name:        header,
-		Content:     fullContent,
-		LineNum:     lineNum,
-		FullText:    "# " + header + "\n" + fullContent,
-		Pages:       pages,
-		TotalPages:  len(pages),
-		ContentType: contentType,
-		SourceType:  SourceMarkdown,
+		Name:          header,
+		Content:       fullContent,
+		LineNum:       lineNum,
+		FullText:      "# " + header + "\n" + fullContent,
+		Pages:         pages,
+		TotalPages:    len(pages),
+		ContentType:   contentType,
+		SourceType:    SourceMarkdown,
+		PageStartLine: pageStartLine,
 	}
 }
 

@@ -748,7 +748,7 @@ var codePatternBracket = regexp.MustCompile(`\[([^\]]+\(\))\]`) // [funcName()]
 // formatAssistantContent applies markdown formatting plus function highlighting
 func formatAssistantContent(text string, termWidth int) string {
 	// First apply standard markdown formatting from formatter.go
-	text = formatMarkdown(text, termWidth)
+	text = annotatedLinesToString(formatMarkdown(text, termWidth))
 	// Then highlight [funcName()] patterns - yellow for function references
 	text = codePatternBracket.ReplaceAllString(text, "[yellow]$1[-]")
 	return text

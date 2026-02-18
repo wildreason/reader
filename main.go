@@ -19,6 +19,9 @@ var (
 	Date    = "unknown"
 )
 
+// showLineNumbers enables source file line numbers in the gutter (-n flag)
+var showLineNumbers bool
+
 // fileType defines a supported file type with its extensions
 type fileType struct {
 	name       string
@@ -407,6 +410,17 @@ func printUsage() {
 }
 
 func main() {
+	// Parse -n flag early (before other arg processing)
+	var cleanArgs []string
+	for _, arg := range os.Args[1:] {
+		if arg == "-n" {
+			showLineNumbers = true
+		} else {
+			cleanArgs = append(cleanArgs, arg)
+		}
+	}
+	os.Args = append([]string{os.Args[0]}, cleanArgs...)
+
 	// Check for subcommand or shortcut as first arg
 	if len(os.Args) >= 2 {
 		first := os.Args[1]
