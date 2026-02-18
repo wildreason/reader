@@ -33,7 +33,7 @@ func runReaderMode(blocks []Block, sourceName string, termWidth int, style strin
 	app := tview.NewApplication()
 
 	text := tview.NewTextView().
-		SetWrap(true).
+		SetWrap(false).
 		SetDynamicColors(true).
 		SetRegions(true).
 		SetScrollable(true)

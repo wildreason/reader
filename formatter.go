@@ -171,6 +171,9 @@ func FormatBlockPage(block *Block, pageNum int, termWidth int, borderStyle Borde
 
 	// Adjust content width based on border indent
 	contentWidth := termWidth - renderer.GetContentIndent()
+	if !renderer.IsBoxStyle() {
+		contentWidth = contentWidth - 1 // Account for " " prefix added to non-box content lines
+	}
 
 	// Render markdown
 	rendered := formatMarkdown(pageContent, contentWidth)
@@ -563,52 +566,163 @@ func renderCodeBlockBoxed(lines []string, language string, maxWidth int) []strin
 	return result
 }
 
+// wrapLine wraps text at maxWidth, respecting tview color tags.
+// Continuation lines are prefixed with continuationIndent.
+func wrapLine(text string, maxWidth int, continuationIndent string) []string {
+	if maxWidth <= 0 || text == "" {
+		return []string{text}
+	}
+
+	if tview.TaggedStringWidth(text) <= maxWidth {
+		return []string{text}
+	}
+
+	var lines []string
+	remaining := text
+	isFirst := true
+
+	for remaining != "" {
+		effectiveWidth := maxWidth
+		if !isFirst {
+			indentWidth := tview.TaggedStringWidth(continuationIndent)
+			effectiveWidth = maxWidth - indentWidth
+			if effectiveWidth <= 0 {
+				effectiveWidth = 1
+			}
+		}
+
+		if tview.TaggedStringWidth(remaining) <= effectiveWidth {
+			if isFirst {
+				lines = append(lines, remaining)
+			} else {
+				lines = append(lines, continuationIndent+remaining)
+			}
+			break
+		}
+
+		runes := []rune(remaining)
+		visWidth := 0
+		lastSpaceIdx := -1
+		breakIdx := len(runes)
+		i := 0
+
+		for i < len(runes) {
+			// Skip tview color tags [...]
+			if runes[i] == '[' {
+				j := i + 1
+				for j < len(runes) && runes[j] != ']' {
+					j++
+				}
+				if j < len(runes) {
+					i = j + 1
+					continue
+				}
+			}
+
+			visWidth++
+			if visWidth > effectiveWidth {
+				if lastSpaceIdx > 0 {
+					breakIdx = lastSpaceIdx
+				} else {
+					breakIdx = i
+				}
+				break
+			}
+
+			if runes[i] == ' ' {
+				lastSpaceIdx = i
+			}
+			i++
+		}
+
+		if i >= len(runes) && visWidth <= effectiveWidth {
+			if isFirst {
+				lines = append(lines, remaining)
+			} else {
+				lines = append(lines, continuationIndent+remaining)
+			}
+			break
+		}
+
+		chunk := string(runes[:breakIdx])
+		if isFirst {
+			lines = append(lines, chunk)
+		} else {
+			lines = append(lines, continuationIndent+chunk)
+		}
+
+		rest := runes[breakIdx:]
+		if len(rest) > 0 && rest[0] == ' ' {
+			rest = rest[1:]
+		}
+		remaining = string(rest)
+		isFirst = false
+	}
+
+	if len(lines) == 0 {
+		return []string{text}
+	}
+
+	return lines
+}
+
 // processMarkdownLine processes a single markdown line
 func processMarkdownLine(line string, maxWidth int) []string {
 	processed := line
 	trimmed := strings.TrimSpace(line)
+	leadingSpaces := len(line) - len(strings.TrimLeft(line, " \t"))
 
 	// Check for headers first (# ## ###) - process before other formatting
-	// TODO: Experiment with header colors - may need adjustment
 	if strings.HasPrefix(trimmed, "# ") {
 		content := strings.TrimPrefix(trimmed, "# ")
 		content = processInlineCode(content)
 		content = removeMarkdownBold(content)
-		return []string{"[yellow:-:b]" + content + "[-:-:-]"}  // FIX: Yellow may be too bright
+		return wrapLine("[yellow:-:b]"+content+"[-:-:-]", maxWidth, "")
 	}
 	if strings.HasPrefix(trimmed, "## ") {
 		content := strings.TrimPrefix(trimmed, "## ")
 		content = processInlineCode(content)
 		content = removeMarkdownBold(content)
-		return []string{"[#87ceeb:-:b]" + content + "[-:-:-]"}  // FIX: Light blue for h2
+		return wrapLine("[#87ceeb:-:b]"+content+"[-:-:-]", maxWidth, "")
 	}
 	if strings.HasPrefix(trimmed, "### ") {
 		content := strings.TrimPrefix(trimmed, "### ")
 		content = processInlineCode(content)
 		content = removeMarkdownBold(content)
-		return []string{"[#808080:-:b]" + content + "[-:-:-]"}  // FIX: Gray for h3
+		return wrapLine("[#808080:-:b]"+content+"[-:-:-]", maxWidth, "")
 	}
 
-	// Process in order: code blocks (already handled), then inline code, links, bold, italic, lists
-	// Order matters: process inline code before bold/italic to avoid conflicts
-
-	// Process inline code (`code`) - do this first to protect code from other processing
+	// Process inline formatting
 	processed = processInlineCode(processed)
-
-	// Process links [text](url) -> text (url)
 	processed = processLinks(processed)
-
-	// Remove bold (**text** or __text__) - must be before italic
 	processed = removeMarkdownBold(processed)
-
-	// Remove italic (*text* or _text_) - after bold to avoid conflicts
 	processed = removeMarkdownItalic(processed)
-
-	// Process lists (- item or * item) - after removing bold/italic markers
 	processed = processListItems(processed)
 
-	// Let tview handle word wrapping for consistent behavior
-	return []string{processed}
+	// Determine continuation indent from original line type
+	continuationIndent := ""
+	if leadingSpaces >= 2 && (strings.HasPrefix(trimmed, "- ") || strings.HasPrefix(trimmed, "* ")) {
+		// Nested bullet: "    - content" -> continuation at 6
+		continuationIndent = "      "
+	} else if strings.HasPrefix(trimmed, "- ") || strings.HasPrefix(trimmed, "* ") {
+		// Top-level bullet: "  - content" -> continuation at 4
+		continuationIndent = "    "
+	} else {
+		// Check numbered list
+		for i := 0; i < len(trimmed) && i < 4; i++ {
+			if trimmed[i] >= '0' && trimmed[i] <= '9' {
+				continue
+			}
+			if trimmed[i] == '.' && i > 0 && i+1 < len(trimmed) && trimmed[i+1] == ' ' {
+				// baseIndent (2) + number (i) + ". " (2)
+				continuationIndent = strings.Repeat(" ", i+4)
+				break
+			}
+			break
+		}
+	}
+
+	return wrapLine(processed, maxWidth, continuationIndent)
 }
 
 // removeMarkdownBold removes **text** and __text__ markers and applies bold styling
