@@ -685,7 +685,7 @@ body {
 /* --- Headers --- */
 h1, h2, h3 { position: relative; font-weight: 600; }
 h1 { color: #0A1628; font-size: 30px; margin: 1.5rem 0 0.75rem; padding-left: 0; }
-h2 { color: #1E293B; font-size: 24px; margin: 1.25rem 0 0.5rem; padding-left: 0; }
+h2 { color: #3B82F6; font-size: 24px; margin: 1.25rem 0 0.5rem; padding-left: 0; }
 h3 { color: #334155; font-size: 20px; margin: 1rem 0 0.4rem; padding-left: 0; }
 
 .anchor {
