@@ -1,3 +1,7 @@
+## v1.0.1
+
+- Remove local install step from release target (brew is canonical)
+
 ## v1.0.0
 
 First public release.

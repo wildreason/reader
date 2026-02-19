@@ -116,5 +116,4 @@ release:
 		fi; \
 		rm -f "$$NOTES_FILE"; \
 	fi; \
-	echo "release $$VERSION complete"; \
-	make install >/dev/null 2>&1
+	echo "release $$VERSION complete"
