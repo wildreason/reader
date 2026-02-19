@@ -22,6 +22,9 @@ var (
 // showLineNumbers enables source file line numbers in the gutter (-n flag)
 var showLineNumbers bool
 
+// servePort enables HTTP server mode (--port N flag)
+var servePort int
+
 // fileType defines a supported file type with its extensions
 type fileType struct {
 	name       string
@@ -267,6 +270,10 @@ func resolveShortcut(arg string, exts []string) string {
 // viewFile routes to the correct viewer based on file type
 func viewFile(filePath string) {
 	if detectFileType(filePath) == "img" {
+		if servePort > 0 {
+			fmt.Fprintf(os.Stderr, "Error: --port does not support image files\n")
+			os.Exit(1)
+		}
 		AddRecent(filePath)
 		viewImage(filePath)
 		return
@@ -308,8 +315,23 @@ func viewTextFile(filePath string, forceType string, follow bool) {
 		_, isJSONL = parser.(*JSONLParser)
 	}
 
-	if follow {
+	if follow && servePort == 0 {
 		runFollowMode(filePath, fileContent, isJSONL, termWidth, "auto", BorderNone)
+		return
+	}
+
+	// For --port mode, use Parse() (not ParseContinuous) since web doesn't need terminal pagination
+	if servePort > 0 {
+		var blocks []Block
+		if isJSONL {
+			jsonlParser := &JSONLParser{}
+			filters := showContentSelector(fileContent)
+			jsonlParser.Filters = filters
+			blocks = jsonlParser.Parse(fileContent)
+		} else {
+			blocks = parser.Parse(fileContent)
+		}
+		serveHTML(filePath, blocks, servePort)
 		return
 	}
 
@@ -404,19 +426,29 @@ func printUsage() {
 	fmt.Fprintln(w, "  aster changes.patch           View diff with syntax highlighting")
 	fmt.Fprintln(w, "  aster pick                    Choose from recently viewed files")
 	fmt.Fprintln(w, "  aster latest                  Open the newest file in cwd")
+	fmt.Fprintln(w, "  aster file.md --port 3000     Serve rendered HTML on localhost")
 	fmt.Fprintln(w)
 	fmt.Fprintln(w, "  Images require chafa (brew install chafa).")
 	fmt.Fprintln(w)
 }
 
 func main() {
-	// Parse -n flag early (before other arg processing)
+	// Parse flags early (before other arg processing)
 	var cleanArgs []string
-	for _, arg := range os.Args[1:] {
-		if arg == "-n" {
+	args := os.Args[1:]
+	for i := 0; i < len(args); i++ {
+		if args[i] == "-n" {
 			showLineNumbers = true
+		} else if args[i] == "--port" && i+1 < len(args) {
+			if p, err := parsePositiveInt(args[i+1]); err == nil {
+				servePort = p
+			} else {
+				fmt.Fprintf(os.Stderr, "Error: --port requires a positive integer\n")
+				os.Exit(1)
+			}
+			i++ // skip the port number
 		} else {
-			cleanArgs = append(cleanArgs, arg)
+			cleanArgs = append(cleanArgs, args[i])
 		}
 	}
 	os.Args = append([]string{os.Args[0]}, cleanArgs...)
