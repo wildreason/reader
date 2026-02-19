@@ -2,17 +2,17 @@
 
 ## Project Overview
 
-**aster** - read any file in the terminal, rendered. Single binary.
+**aster** - read any file in the terminal, rendered. Single binary. Two output targets: terminal TUI and web browser.
 
 ```bash
-aster file.md           # Markdown with colors and tables
-aster photo.png         # Image inline (chafa)
-aster changes.diff      # Diff with syntax highlighting
-aster data.jsonl        # JSONL transcript viewer
-aster pick              # Pick from recent files
-aster latest            # Open newest file in cwd
-aster -n file.md        # Show source file line numbers
-aster file.md --port 3000  # Serve rendered HTML on localhost
+aster file.md              # Terminal: Markdown with colors and tables
+aster photo.png            # Terminal: Image inline (chafa)
+aster changes.diff         # Terminal: Diff with syntax highlighting
+aster data.jsonl           # Terminal: JSONL transcript viewer
+aster pick                 # Pick from recent files
+aster latest               # Open newest file in cwd
+aster -n file.md           # Show source file line numbers
+aster file.md --port 3000  # Web: serve rendered HTML on localhost
 ```
 
 Shell alias: `alias as=aster`
@@ -29,29 +29,57 @@ make install   # Install to ~/.local/bin
 
 - `-n` — Source file line numbers in gutter (dim gray, right-aligned)
 - `-f` — Follow mode (file watching)
-- `--port N` — Serve rendered file as HTML on localhost:N (SSE live reload on file change)
+- `--port N` — Serve rendered file as HTML on localhost:N with live reload
 
 ## Architecture
 
+Two rendering pipelines from the same parse layer:
+
 ```
-main.go              Args, subcommands, routing, -n/-f flag parsing
+main.go              Args, subcommands, routing, flag parsing
      |
 detectFileType()     Route by extension: img -> viewImage, text -> parser
      |
 detectParser()       Auto-detect: .md .jsonl .diff .txt .json
      |
-parser.Parse()       Extract blocks from content (Block.PageStartLine for line mapping)
+parser.Parse()       Extract blocks from content
      |
-reader.go            Scrollable TUI (tview), SetLineNumbers config
+     +-- TUI path:   reader.go -> formatter.go (tview tags, Catppuccin dark)
      |
-formatter.go         Render blocks with colors, annotatedLine gutter
+     +-- Web path:   server.go -> formatter_html.go (HTML/CSS/JS, brand light theme)
 ```
+
+### Web mode (`--port`)
+
+- Single block rendering: markdown files render as one continuous document (headings stay as native h1/h2/h3)
+- SSE live reload: file watcher polls every 500ms, pushes reload event to all connected browsers
+- No external dependencies at runtime (highlight.js + fonts loaded from CDN)
+
+### Web features
+
+| Feature | Implementation |
+|---------|---------------|
+| Syntax highlighting | highlight.js CDN, `github` light theme, auto-language detection |
+| Copy button | Appears on code block hover, copies to clipboard |
+| Sortable tables | Click header to sort asc/desc, numeric-aware |
+| Links | Open in new tab, external icon, URL tooltip on hover |
+| Images | `![alt](url)` renders as `<img>`, click to expand |
+| TOC sidebar | Fixed left nav from h1/h2/h3, scroll-spy, collapsible |
+| Diffs | Side-by-side two-column, collapsible hunks, word-level LCS highlighting |
+| Search | `/` or `Ctrl+K` opens fuzzy search overlay with arrow key navigation |
+
+### Brand theme
+
+- Fonts: Inter 400/600 (body), JetBrains Mono 400/600 (code)
+- Colors: Navy #0A1628, Slate #1E293B, Accent Blue #3B82F6, Surface #F8FAFC, White #FFFFFF, Border #E2E8F0
+- Type scale: H1 30px, H2 24px, H3 20px, Body 16px, Small 14px, Caption 12px
+- Rules: Semibold for headings (no italic), Accent Blue for interactive elements only
 
 ## Files
 
 | File | Purpose |
 |------|---------|
-| `main.go` | Entry, subcommand routing, auto-detect |
+| `main.go` | Entry, subcommand routing, auto-detect, flag parsing |
 | `viewer_img.go` | Image rendering (chafa/imgcat, iterm/kitty/symbols) |
 | `parser.go` | MarkdownParser, Block struct, BlockIndex |
 | `parser_jsonl.go` | JSONLParser (transcripts) |
@@ -60,16 +88,15 @@ formatter.go         Render blocks with colors, annotatedLine gutter
 | `parser_todo.go` | TodoParser (JSON todos) |
 | `reader.go` | Scrollable TUI viewer |
 | `follower.go` | Follow mode (-f), file watching |
-| `formatter.go` | Block rendering, markdown, tables, line number gutter |
-| `formatter_diff.go` | Diff coloring |
-| `formatter_html.go` | Block -> HTML rendering for --port mode |
+| `formatter.go` | TUI block rendering, markdown, tables, line number gutter |
+| `formatter_diff.go` | TUI diff coloring (ANSI) |
+| `formatter_html.go` | Web rendering: HTML/CSS/JS, brand theme, all web features |
 | `formatter_shell.go` | Shell output styling |
-| `server.go` | HTTP server, SSE live reload, watcher integration |
+| `server.go` | HTTP server, SSE broadcaster, file watcher, live reload |
 | `content_type.go` | Content type detection |
 | `commands.go` | Navigator, command parsing |
 | `recent.go` | Recent file history (pick/latest) |
 | `context_git.go` | Git context for diffs |
-| `render_colors.go` | Color palette (Catppuccin) |
 | `keybindings.go` | Key action parsing |
 
 ## Commands
@@ -91,13 +118,20 @@ aster json <file|-|+>   JSON
 aster jsonl <file|-|+>  Transcripts
 ```
 
-## Navigation
+## Navigation (TUI)
 
 - `j/k` - scroll down/up (3 lines)
 - `d/u` - half page down/up
 - `g/G` - top/bottom
 - `PgDn/PgUp` - full page
 - `q` - quit
+
+## Navigation (Web)
+
+- `/` or `Ctrl+K` - search
+- `Esc` - close search
+- Arrow keys - navigate search results
+- TOC sidebar - click to jump to section
 
 ## Parser Interface
 
