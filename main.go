@@ -320,7 +320,7 @@ func viewTextFile(filePath string, forceType string, follow bool) {
 		return
 	}
 
-	// For --port mode, use Parse() (not ParseContinuous) since web doesn't need terminal pagination
+	// For --port mode, render as single block so HTML formatter handles headings natively
 	if servePort > 0 {
 		var blocks []Block
 		if isJSONL {
@@ -329,7 +329,14 @@ func viewTextFile(filePath string, forceType string, follow bool) {
 			jsonlParser.Filters = filters
 			blocks = jsonlParser.Parse(fileContent)
 		} else {
-			blocks = parser.Parse(fileContent)
+			// Single block: let HTML render h1/h2/h3 directly instead of splitting by headers
+			blocks = []Block{{
+				Name:        filepath.Base(filePath),
+				Content:     fileContent,
+				Pages:       []string{fileContent},
+				TotalPages:  1,
+				ContentType: BlockContentPlain,
+			}}
 		}
 		serveHTML(filePath, blocks, servePort)
 		return

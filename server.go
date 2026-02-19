@@ -68,7 +68,8 @@ func serveHTML(filePath string, blocks []Block, port int) {
 		stopCh := make(chan struct{})
 		defer close(stopCh)
 
-		go watchAndRerender(filePath, title, &mu, &currentHTML, broadcaster, stopCh)
+		singleBlock := len(blocks) == 1
+		go watchAndRerender(filePath, title, singleBlock, &mu, &currentHTML, broadcaster, stopCh)
 	}
 
 	// GET / -- serve rendered HTML
@@ -122,7 +123,7 @@ func serveHTML(filePath string, blocks []Block, port int) {
 }
 
 // watchAndRerender polls the file for changes, re-parses, re-renders HTML, and notifies SSE clients
-func watchAndRerender(filePath string, title string, mu *sync.RWMutex, currentHTML *string, broadcaster *sseBroadcaster, stopCh <-chan struct{}) {
+func watchAndRerender(filePath string, title string, singleBlock bool, mu *sync.RWMutex, currentHTML *string, broadcaster *sseBroadcaster, stopCh <-chan struct{}) {
 	parser := detectParser(filePath)
 	var lastModTime time.Time
 
@@ -148,9 +149,20 @@ func watchAndRerender(filePath string, title string, mu *sync.RWMutex, currentHT
 				continue
 			}
 
-			blocks := parser.Parse(string(content))
-			if len(blocks) == 0 {
-				continue
+			var blocks []Block
+			if singleBlock {
+				blocks = []Block{{
+					Name:        title,
+					Content:     string(content),
+					Pages:       []string{string(content)},
+					TotalPages:  1,
+					ContentType: BlockContentPlain,
+				}}
+			} else {
+				blocks = parser.Parse(string(content))
+				if len(blocks) == 0 {
+					continue
+				}
 			}
 
 			rendered := RenderHTMLPage(title, blocks, showLineNumbers)
