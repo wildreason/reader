@@ -7,6 +7,7 @@ type Frontmatter struct {
 	Title   string
 	Created string
 	Tags    []string
+	Type    string // e.g. "contract" for Oberon-style interactive rendering
 	Raw     map[string]string
 }
 
@@ -65,6 +66,8 @@ func ParseFrontmatter(content string) (Frontmatter, string) {
 			fm.Created = value
 		case "tags":
 			fm.Tags = parseBracketList(value)
+		case "type":
+			fm.Type = value
 		}
 	}
 

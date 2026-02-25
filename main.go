@@ -41,11 +41,14 @@ type fileType struct {
 var fileTypes = map[string]fileType{
 	"md":    {name: "markdown", extensions: []string{".md", ".markdown"}},
 	"img":   {name: "image", extensions: imageExtensions},
+	"vid":   {name: "video", extensions: videoExtensions},
 	"txt":   {name: "text", extensions: []string{".txt", ".log"}},
 	"json":  {name: "json", extensions: []string{".json"}},
 	"yaml":  {name: "yaml", extensions: []string{".yaml", ".yml"}},
 	"diff":  {name: "diff", extensions: []string{".diff", ".patch"}},
 	"jsonl": {name: "jsonl", extensions: []string{".jsonl"}},
+	"csv":   {name: "csv", extensions: []string{".csv", ".tsv"}},
+	"lit":   {name: "literate", extensions: []string{".lit"}},
 }
 
 func detectTerminalWidth() int {
@@ -106,8 +109,10 @@ func detectFileType(filePath string) string {
 // detectParser selects the appropriate parser based on file extension
 func detectParser(filePath string) Parser {
 	parsers := []Parser{
+		&LitParser{},
 		&TodoParser{},
 		&DiffParser{},
+		&CsvParser{},
 		&MarkdownParser{},
 		&JSONLParser{},
 		&TxtParser{},
@@ -155,6 +160,11 @@ func detectParserFromContent(content string) Parser {
 	// YAML -> plain text (preserves structure)
 	if isYAML(content) {
 		return &TxtParser{}
+	}
+
+	// CSV -> table
+	if isCSV(content) {
+		return &CsvParser{}
 	}
 
 	return &MarkdownParser{}
@@ -304,6 +314,12 @@ func viewFile(filePath string) {
 		return
 	}
 
+	if detectFileType(filePath) == "lit" && servePort > 0 {
+		AddRecent(filePath)
+		serveLit(filePath, servePort)
+		return
+	}
+
 	if detectFileType(filePath) == "img" {
 		AddRecent(filePath)
 		if exportHTML {
@@ -315,6 +331,20 @@ func viewFile(filePath string) {
 			return
 		}
 		viewImage(filePath)
+		return
+	}
+
+	if detectFileType(filePath) == "vid" {
+		AddRecent(filePath)
+		if exportHTML {
+			exportVideoHTML(filePath)
+			return
+		}
+		if servePort > 0 {
+			serveVideoHTML(filePath, servePort)
+			return
+		}
+		viewVideo(filePath)
 		return
 	}
 	viewTextFile(filePath, forceType, false)
@@ -333,6 +363,35 @@ func exportImageHTML(filePath string) {
 	dataURI := fmt.Sprintf("data:%s;base64,%s", mime, b64)
 	title := filepath.Base(filePath)
 	fmt.Print(RenderStaticImageHTML(title, dataURI))
+}
+
+// exportVideoHTML reads a video file and outputs a self-contained HTML page to stdout
+func exportVideoHTML(filePath string) {
+	info, err := os.Stat(filePath)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Error: Could not stat file '%s': %v\n", filePath, err)
+		os.Exit(1)
+	}
+	title := filepath.Base(filePath)
+	ext := filepath.Ext(filePath)
+	mime := videoMIME(ext)
+
+	const maxInlineSize = 10 * 1024 * 1024 // 10MB
+	if info.Size() >= maxInlineSize {
+		fmt.Fprintf(os.Stderr, "Warning: %s is %dMB, too large to inline as base64. Referencing file path.\n",
+			title, info.Size()/(1024*1024))
+		fmt.Print(RenderStaticVideoHTML(title, filePath, mime, false))
+		return
+	}
+
+	data, err := os.ReadFile(filePath)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Error: Could not read file '%s': %v\n", filePath, err)
+		os.Exit(1)
+	}
+	b64 := base64.StdEncoding.EncodeToString(data)
+	dataURI := fmt.Sprintf("data:%s;base64,%s", mime, b64)
+	fmt.Print(RenderStaticVideoHTML(title, dataURI, mime, true))
 }
 
 // listDirectory prints a formatted table of markdown files in a directory
@@ -422,6 +481,8 @@ func viewTextFile(filePath string, forceType string, follow bool) {
 			parser = &TxtParser{}
 		case "yaml":
 			parser = &TxtParser{}
+		case "csv":
+			parser = &CsvParser{}
 		}
 	} else {
 		parser = detectParser(filePath)
@@ -435,8 +496,9 @@ func viewTextFile(filePath string, forceType string, follow bool) {
 
 	// Static HTML export
 	if exportHTML {
+		isCSVType := forceType == "csv" || detectFileType(filePath) == "csv"
 		var blocks []Block
-		if isJSONL {
+		if isJSONL || isCSVType {
 			blocks = parser.Parse(fileContent)
 		} else {
 			contentType := BlockContentPlain
@@ -458,7 +520,7 @@ func viewTextFile(filePath string, forceType string, follow bool) {
 		if fm.Title != "" {
 			title = fm.Title
 		}
-		if !isJSONL {
+		if !isJSONL && !isCSVType {
 			blocks[0].Content = body
 			blocks[0].Pages = []string{body}
 		}
@@ -468,12 +530,15 @@ func viewTextFile(filePath string, forceType string, follow bool) {
 
 	// For --port mode, render as single block so HTML formatter handles headings natively
 	if servePort > 0 {
+		isCSVType := forceType == "csv" || detectFileType(filePath) == "csv"
 		var blocks []Block
 		if isJSONL {
 			jsonlParser := &JSONLParser{}
 			filters := showContentSelector(fileContent)
 			jsonlParser.Filters = filters
 			blocks = jsonlParser.Parse(fileContent)
+		} else if isCSVType {
+			blocks = parser.Parse(fileContent)
 		} else {
 			// Single block: let HTML render h1/h2/h3 directly instead of splitting by headers
 			contentType := BlockContentPlain
@@ -532,6 +597,8 @@ func viewStdinContent(content string, forceType string) {
 			parser = &TxtParser{}
 		case "yaml":
 			parser = &TxtParser{}
+		case "csv":
+			parser = &CsvParser{}
 		default:
 			parser = &MarkdownParser{}
 		}
@@ -580,7 +647,7 @@ func printUsage() {
 	fmt.Fprintln(w)
 	fmt.Fprintln(w, "Flags:")
 	fmt.Fprintln(w, "  -n                    Show source file line numbers")
-	fmt.Fprintln(w, "  -t TYPE               Force content type (md, json, jsonl, diff, txt, yaml)")
+	fmt.Fprintln(w, "  -t TYPE               Force content type (md, json, jsonl, diff, txt, yaml, csv)")
 	fmt.Fprintln(w, "  --port N              Serve rendered HTML on localhost:N")
 	fmt.Fprintln(w, "  --html                Export self-contained HTML to stdout")
 	fmt.Fprintln(w)
@@ -590,7 +657,9 @@ func printUsage() {
 	fmt.Fprintln(w, "  Unified diffs   .diff .patch")
 	fmt.Fprintln(w, "  JSON            .json")
 	fmt.Fprintln(w, "  Transcripts     .jsonl")
+	fmt.Fprintln(w, "  CSV/TSV         .csv .tsv")
 	fmt.Fprintln(w, "  Images          .png .jpg .gif .webp .bmp .svg")
+	fmt.Fprintln(w, "  Video           .mp4 .webm .mov .mkv")
 	fmt.Fprintln(w)
 	fmt.Fprintln(w, "Navigation:")
 	fmt.Fprintln(w, "  j / k             Scroll down / up")
@@ -621,7 +690,7 @@ func main() {
 	// Parse flags early (before other arg processing)
 	var cleanArgs []string
 	args := os.Args[1:]
-	validTypes := map[string]bool{"md": true, "json": true, "jsonl": true, "diff": true, "txt": true, "yaml": true}
+	validTypes := map[string]bool{"md": true, "json": true, "jsonl": true, "diff": true, "txt": true, "yaml": true, "csv": true}
 	for i := 0; i < len(args); i++ {
 		if args[i] == "-n" {
 			showLineNumbers = true
@@ -758,6 +827,15 @@ func runSubcommand(typeName string, ft fileType, args []string) {
 	if typeName == "img" {
 		AddRecent(filePath)
 		viewImage(filePath)
+	} else if typeName == "vid" {
+		AddRecent(filePath)
+		if exportHTML {
+			exportVideoHTML(filePath)
+		} else if servePort > 0 {
+			serveVideoHTML(filePath, servePort)
+		} else {
+			viewVideo(filePath)
+		}
 	} else {
 		viewTextFile(filePath, typeName, follow)
 	}

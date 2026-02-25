@@ -16,6 +16,7 @@ const (
 	BlockContentTree
 	BlockContentJSON
 	BlockContentYAML
+	BlockContentCSV
 )
 
 // String returns a human-readable name for the content type
@@ -33,6 +34,8 @@ func (ct BlockContentType) String() string {
 		return "json"
 	case BlockContentYAML:
 		return "yaml"
+	case BlockContentCSV:
+		return "csv"
 	default:
 		return "plain"
 	}
