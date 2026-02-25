@@ -468,27 +468,17 @@ func serveHTML(filePath string, blocks []Block, port int) {
 	)
 
 	// Extract frontmatter title if available (for single-block markdown)
-	var isContract bool
-	var contractFM Frontmatter
 	if len(blocks) == 1 {
 		fm, body := ParseFrontmatter(blocks[0].Content)
 		if fm.Title != "" {
 			title = fm.Title
-		}
-		if fm.Type == "contract" {
-			isContract = true
-			contractFM = fm
 		}
 		blocks[0].Content = body
 		blocks[0].Pages = []string{body}
 	}
 
 	// Initial render
-	if isContract {
-		currentHTML = RenderContractHTMLPage(title, blocks[0].Content, contractFM)
-	} else {
-		currentHTML = RenderHTMLPage(title, blocks, showLineNumbers)
-	}
+	currentHTML = RenderHTMLPage(title, blocks, showLineNumbers)
 
 	// File watcher: re-parse + re-render on change, notify SSE clients
 	if filePath != "" && filePath != "stdin" {
@@ -500,7 +490,7 @@ func serveHTML(filePath string, blocks []Block, port int) {
 		if singleBlock {
 			ct = blocks[0].ContentType
 		}
-		go watchAndRerender(filePath, title, singleBlock, ct, isContract, &mu, &currentHTML, broadcaster, stopCh)
+		go watchAndRerender(filePath, title, singleBlock, ct, &mu, &currentHTML, broadcaster, stopCh)
 	}
 
 	// GET / -- serve rendered HTML
@@ -777,7 +767,7 @@ func watchDirectory(dirPath string, dirName string, mu *sync.RWMutex, cache map[
 }
 
 // watchAndRerender polls the file for changes, re-parses, re-renders HTML, and notifies SSE clients
-func watchAndRerender(filePath string, title string, singleBlock bool, contentType BlockContentType, isContract bool, mu *sync.RWMutex, currentHTML *string, broadcaster *sseBroadcaster, stopCh <-chan struct{}) {
+func watchAndRerender(filePath string, title string, singleBlock bool, contentType BlockContentType, mu *sync.RWMutex, currentHTML *string, broadcaster *sseBroadcaster, stopCh <-chan struct{}) {
 	parser := detectParser(filePath)
 	var lastModTime time.Time
 
@@ -814,18 +804,14 @@ func watchAndRerender(filePath string, title string, singleBlock bool, contentTy
 				}
 				bodyStr = body
 
-				if isContract || fm.Type == "contract" {
-					rendered = RenderContractHTMLPage(renderTitle, bodyStr, fm)
-				} else {
-					blocks = []Block{{
-						Name:        renderTitle,
-						Content:     bodyStr,
-						Pages:       []string{bodyStr},
-						TotalPages:  1,
-						ContentType: contentType,
-					}}
-					rendered = RenderHTMLPage(renderTitle, blocks, showLineNumbers)
-				}
+				blocks = []Block{{
+					Name:        renderTitle,
+					Content:     bodyStr,
+					Pages:       []string{bodyStr},
+					TotalPages:  1,
+					ContentType: contentType,
+				}}
+				rendered = RenderHTMLPage(renderTitle, blocks, showLineNumbers)
 			} else {
 				blocks = parser.Parse(string(content))
 				if len(blocks) == 0 {

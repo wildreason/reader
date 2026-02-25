@@ -528,6 +528,15 @@ func viewTextFile(filePath string, forceType string, follow bool) {
 		return
 	}
 
+	// Contract type: own server, dispatched before generic serveHTML
+	if servePort > 0 {
+		fm, _ := ParseFrontmatter(fileContent)
+		if fm.Type == "contract" {
+			serveContractHTML(filePath, servePort)
+			return
+		}
+	}
+
 	// For --port mode, render as single block so HTML formatter handles headings natively
 	if servePort > 0 {
 		isCSVType := forceType == "csv" || detectFileType(filePath) == "csv"
