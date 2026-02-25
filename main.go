@@ -46,6 +46,7 @@ var fileTypes = map[string]fileType{
 	"yaml":  {name: "yaml", extensions: []string{".yaml", ".yml"}},
 	"diff":  {name: "diff", extensions: []string{".diff", ".patch"}},
 	"jsonl": {name: "jsonl", extensions: []string{".jsonl"}},
+	"csv":   {name: "csv", extensions: []string{".csv", ".tsv"}},
 }
 
 func detectTerminalWidth() int {
@@ -108,6 +109,7 @@ func detectParser(filePath string) Parser {
 	parsers := []Parser{
 		&TodoParser{},
 		&DiffParser{},
+		&CsvParser{},
 		&MarkdownParser{},
 		&JSONLParser{},
 		&TxtParser{},
@@ -155,6 +157,11 @@ func detectParserFromContent(content string) Parser {
 	// YAML -> plain text (preserves structure)
 	if isYAML(content) {
 		return &TxtParser{}
+	}
+
+	// CSV -> table
+	if isCSV(content) {
+		return &CsvParser{}
 	}
 
 	return &MarkdownParser{}
@@ -422,6 +429,8 @@ func viewTextFile(filePath string, forceType string, follow bool) {
 			parser = &TxtParser{}
 		case "yaml":
 			parser = &TxtParser{}
+		case "csv":
+			parser = &CsvParser{}
 		}
 	} else {
 		parser = detectParser(filePath)
@@ -435,8 +444,9 @@ func viewTextFile(filePath string, forceType string, follow bool) {
 
 	// Static HTML export
 	if exportHTML {
+		isCSVType := forceType == "csv" || detectFileType(filePath) == "csv"
 		var blocks []Block
-		if isJSONL {
+		if isJSONL || isCSVType {
 			blocks = parser.Parse(fileContent)
 		} else {
 			contentType := BlockContentPlain
@@ -458,7 +468,7 @@ func viewTextFile(filePath string, forceType string, follow bool) {
 		if fm.Title != "" {
 			title = fm.Title
 		}
-		if !isJSONL {
+		if !isJSONL && !isCSVType {
 			blocks[0].Content = body
 			blocks[0].Pages = []string{body}
 		}
@@ -468,12 +478,15 @@ func viewTextFile(filePath string, forceType string, follow bool) {
 
 	// For --port mode, render as single block so HTML formatter handles headings natively
 	if servePort > 0 {
+		isCSVType := forceType == "csv" || detectFileType(filePath) == "csv"
 		var blocks []Block
 		if isJSONL {
 			jsonlParser := &JSONLParser{}
 			filters := showContentSelector(fileContent)
 			jsonlParser.Filters = filters
 			blocks = jsonlParser.Parse(fileContent)
+		} else if isCSVType {
+			blocks = parser.Parse(fileContent)
 		} else {
 			// Single block: let HTML render h1/h2/h3 directly instead of splitting by headers
 			contentType := BlockContentPlain
@@ -532,6 +545,8 @@ func viewStdinContent(content string, forceType string) {
 			parser = &TxtParser{}
 		case "yaml":
 			parser = &TxtParser{}
+		case "csv":
+			parser = &CsvParser{}
 		default:
 			parser = &MarkdownParser{}
 		}
@@ -580,7 +595,7 @@ func printUsage() {
 	fmt.Fprintln(w)
 	fmt.Fprintln(w, "Flags:")
 	fmt.Fprintln(w, "  -n                    Show source file line numbers")
-	fmt.Fprintln(w, "  -t TYPE               Force content type (md, json, jsonl, diff, txt, yaml)")
+	fmt.Fprintln(w, "  -t TYPE               Force content type (md, json, jsonl, diff, txt, yaml, csv)")
 	fmt.Fprintln(w, "  --port N              Serve rendered HTML on localhost:N")
 	fmt.Fprintln(w, "  --html                Export self-contained HTML to stdout")
 	fmt.Fprintln(w)
@@ -590,6 +605,7 @@ func printUsage() {
 	fmt.Fprintln(w, "  Unified diffs   .diff .patch")
 	fmt.Fprintln(w, "  JSON            .json")
 	fmt.Fprintln(w, "  Transcripts     .jsonl")
+	fmt.Fprintln(w, "  CSV/TSV         .csv .tsv")
 	fmt.Fprintln(w, "  Images          .png .jpg .gif .webp .bmp .svg")
 	fmt.Fprintln(w)
 	fmt.Fprintln(w, "Navigation:")
@@ -621,7 +637,7 @@ func main() {
 	// Parse flags early (before other arg processing)
 	var cleanArgs []string
 	args := os.Args[1:]
-	validTypes := map[string]bool{"md": true, "json": true, "jsonl": true, "diff": true, "txt": true, "yaml": true}
+	validTypes := map[string]bool{"md": true, "json": true, "jsonl": true, "diff": true, "txt": true, "yaml": true, "csv": true}
 	for i := 0; i < len(args); i++ {
 		if args[i] == "-n" {
 			showLineNumbers = true

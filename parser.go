@@ -33,6 +33,7 @@ type Block struct {
 	PageMeta      []string           // Per-page metadata (e.g., filename for diff pages)
 	SourceType    SourceType         // Track which parser created this block
 	PageStartLine []int             // 1-indexed file line number for first content line of each page
+	CsvRecords    [][]string        // Raw CSV records (header + data rows) for structured rendering
 }
 
 // LinesPerPage is the fixed number of lines per page in e-reader mode

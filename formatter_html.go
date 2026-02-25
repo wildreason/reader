@@ -292,6 +292,8 @@ func formatBlockHTML(block *Block, showLineNums bool, singleBlock bool) string {
 			sb.WriteString(formatCodeBlockHTML(pageContent, "json"))
 		case BlockContentYAML:
 			sb.WriteString(formatCodeBlockHTML(pageContent, "yaml"))
+		case BlockContentCSV:
+			sb.WriteString(formatCsvHTML(block))
 		default:
 			sb.WriteString(formatMarkdownHTML(pageContent, block, pageNum, showLineNums))
 		}
@@ -312,6 +314,288 @@ func formatCodeBlockHTML(content string, lang string) string {
 	sb.WriteString("</code></pre></div>\n")
 	sb.WriteString("</div>\n")
 	return sb.String()
+}
+
+// formatCsvHTML renders CSV data as an interactive table with filtering and optional chart
+func formatCsvHTML(block *Block) string {
+	records := block.CsvRecords
+	if len(records) < 1 {
+		return "<div class=\"content\"><p>Empty CSV</p></div>\n"
+	}
+
+	headers := records[0]
+	dataRows := records[1:]
+
+	var sb strings.Builder
+	sb.WriteString("<div class=\"content csv-content\">\n")
+
+	// Metadata header
+	sb.WriteString(fmt.Sprintf("<div class=\"csv-meta\">%d rows x %d columns</div>\n",
+		len(dataRows), len(headers)))
+
+	// Auto-chart if data shape fits
+	chart := csvAutoChart(headers, dataRows)
+	if chart != "" {
+		sb.WriteString("<div class=\"csv-chart\">\n")
+		sb.WriteString(chart)
+		sb.WriteString("</div>\n")
+	}
+
+	// Row count display
+	sb.WriteString(fmt.Sprintf("<div class=\"csv-row-count\" id=\"csv-row-count\">Showing %d of %d rows</div>\n",
+		len(dataRows), len(dataRows)))
+
+	// Table with filter row
+	sb.WriteString("<div class=\"table-scroll\">\n")
+	sb.WriteString("<table class=\"sortable csv-table\" id=\"csv-table\">\n")
+
+	// Thead: filter row + header row
+	sb.WriteString("<thead>\n")
+	// Filter row
+	sb.WriteString("<tr class=\"filter-row\">")
+	for colIdx := range headers {
+		sb.WriteString(fmt.Sprintf("<th><input type=\"text\" class=\"col-filter\" data-col=\"%d\" placeholder=\"Filter...\" autocomplete=\"off\"></th>", colIdx))
+	}
+	sb.WriteString("</tr>\n")
+	// Header row
+	sb.WriteString("<tr>")
+	for colIdx, h := range headers {
+		sb.WriteString(fmt.Sprintf("<th onclick=\"sortTable(this, %d)\" class=\"sortable-th\">%s <span class=\"sort-icon\">&#x25B4;&#x25BE;</span></th>",
+			colIdx, html.EscapeString(h)))
+	}
+	sb.WriteString("</tr>\n")
+	sb.WriteString("</thead>\n")
+
+	// Tbody
+	sb.WriteString("<tbody>\n")
+	for _, row := range dataRows {
+		sb.WriteString("<tr>")
+		for j := 0; j < len(headers); j++ {
+			cell := ""
+			if j < len(row) {
+				cell = row[j]
+			}
+			// Right-align numeric cells
+			if isNumericString(cell) {
+				sb.WriteString(fmt.Sprintf("<td style=\"text-align:right\">%s</td>", html.EscapeString(cell)))
+			} else {
+				sb.WriteString(fmt.Sprintf("<td>%s</td>", html.EscapeString(cell)))
+			}
+		}
+		sb.WriteString("</tr>\n")
+	}
+	sb.WriteString("</tbody>\n")
+	sb.WriteString("</table>\n</div>\n")
+	sb.WriteString("</div>\n")
+
+	return sb.String()
+}
+
+// isNumericString checks if a string looks like a number
+func isNumericString(s string) bool {
+	s = strings.TrimSpace(s)
+	if s == "" {
+		return false
+	}
+	dotCount := 0
+	for i, c := range s {
+		if c == '-' && i == 0 {
+			continue
+		}
+		if c == '.' {
+			dotCount++
+			if dotCount > 1 {
+				return false
+			}
+			continue
+		}
+		if c == ',' {
+			continue // thousands separator
+		}
+		if c < '0' || c > '9' {
+			return false
+		}
+	}
+	return true
+}
+
+// csvAutoChart detects if CSV data is chart-worthy and returns SVG
+func csvAutoChart(headers []string, rows [][]string) string {
+	if len(headers) < 2 || len(rows) < 2 {
+		return ""
+	}
+
+	// Find numeric columns (skip first column as potential label/x-axis)
+	numericCols := []int{}
+	for col := 1; col < len(headers); col++ {
+		isNumeric := true
+		for _, row := range rows {
+			if col >= len(row) || row[col] == "" {
+				continue
+			}
+			if !isNumericString(row[col]) {
+				isNumeric = false
+				break
+			}
+		}
+		if isNumeric {
+			numericCols = append(numericCols, col)
+		}
+	}
+
+	if len(numericCols) == 0 {
+		return ""
+	}
+
+	// Limit to first 2 numeric columns for readability
+	if len(numericCols) > 2 {
+		numericCols = numericCols[:2]
+	}
+
+	// Collect label + values
+	type point struct {
+		label string
+		vals  []float64
+	}
+
+	var points []point
+	for _, row := range rows {
+		label := ""
+		if len(row) > 0 {
+			label = row[0]
+		}
+		vals := make([]float64, len(numericCols))
+		for i, col := range numericCols {
+			if col < len(row) {
+				vals[i] = parseCSVFloat(row[col])
+			}
+		}
+		points = append(points, point{label: label, vals: vals})
+	}
+
+	if len(points) < 2 {
+		return ""
+	}
+
+	// Limit to 50 points for reasonable chart size
+	if len(points) > 50 {
+		points = points[:50]
+	}
+
+	// Find min/max across all series
+	minVal := points[0].vals[0]
+	maxVal := points[0].vals[0]
+	for _, p := range points {
+		for _, v := range p.vals {
+			if v < minVal {
+				minVal = v
+			}
+			if v > maxVal {
+				maxVal = v
+			}
+		}
+	}
+
+	// Add padding to range
+	valRange := maxVal - minVal
+	if valRange == 0 {
+		valRange = 1
+	}
+	minVal -= valRange * 0.05
+	maxVal += valRange * 0.05
+	valRange = maxVal - minVal
+
+	// SVG dimensions
+	svgW := 700
+	svgH := 280
+	padL := 60
+	padR := 20
+	padT := 20
+	padB := 60
+	chartW := svgW - padL - padR
+	chartH := svgH - padT - padB
+
+	colors := []string{"#3B82F6", "#1E293B"}
+
+	var sb strings.Builder
+	sb.WriteString(fmt.Sprintf("<svg viewBox=\"0 0 %d %d\" class=\"csv-svg\">\n", svgW, svgH))
+
+	// Gridlines and Y-axis labels
+	gridSteps := 5
+	for i := 0; i <= gridSteps; i++ {
+		y := padT + chartH - (i*chartH)/gridSteps
+		val := minVal + (float64(i)/float64(gridSteps))*valRange
+		sb.WriteString(fmt.Sprintf("<line x1=\"%d\" y1=\"%d\" x2=\"%d\" y2=\"%d\" stroke=\"#E2E8F0\" stroke-width=\"1\"/>\n",
+			padL, y, padL+chartW, y))
+		sb.WriteString(fmt.Sprintf("<text x=\"%d\" y=\"%d\" text-anchor=\"end\" fill=\"#64748B\" font-size=\"11\" font-family=\"-apple-system,sans-serif\">%.0f</text>\n",
+			padL-8, y+4, val))
+	}
+
+	// Axes
+	sb.WriteString(fmt.Sprintf("<line x1=\"%d\" y1=\"%d\" x2=\"%d\" y2=\"%d\" stroke=\"#E2E8F0\" stroke-width=\"1\"/>\n",
+		padL, padT+chartH, padL+chartW, padT+chartH))
+
+	// Plot each series
+	for si := range numericCols {
+		color := colors[si%len(colors)]
+
+		// Build polyline points
+		var polyPoints []string
+		for i, p := range points {
+			x := padL + (i*chartW)/(len(points)-1)
+			y := padT + chartH - int(((p.vals[si]-minVal)/valRange)*float64(chartH))
+			polyPoints = append(polyPoints, fmt.Sprintf("%d,%d", x, y))
+		}
+
+		// Line
+		sb.WriteString(fmt.Sprintf("<polyline points=\"%s\" fill=\"none\" stroke=\"%s\" stroke-width=\"2\"/>\n",
+			strings.Join(polyPoints, " "), color))
+
+		// Dots
+		for i, p := range points {
+			x := padL + (i*chartW)/(len(points)-1)
+			y := padT + chartH - int(((p.vals[si]-minVal)/valRange)*float64(chartH))
+			sb.WriteString(fmt.Sprintf("<circle cx=\"%d\" cy=\"%d\" r=\"3\" fill=\"%s\"/>\n", x, y, color))
+			_ = p // used above
+		}
+	}
+
+	// X-axis labels (show subset to avoid overlap)
+	labelStep := 1
+	if len(points) > 15 {
+		labelStep = len(points) / 10
+	}
+	for i := 0; i < len(points); i += labelStep {
+		x := padL + (i*chartW)/(len(points)-1)
+		label := points[i].label
+		if len(label) > 12 {
+			label = label[:12]
+		}
+		sb.WriteString(fmt.Sprintf("<text x=\"%d\" y=\"%d\" text-anchor=\"middle\" fill=\"#64748B\" font-size=\"11\" font-family=\"-apple-system,sans-serif\" transform=\"rotate(-45 %d %d)\">%s</text>\n",
+			x, padT+chartH+16, x, padT+chartH+16, html.EscapeString(label)))
+	}
+
+	// Legend
+	for si, col := range numericCols {
+		color := colors[si%len(colors)]
+		lx := padL + si*120
+		sb.WriteString(fmt.Sprintf("<rect x=\"%d\" y=\"%d\" width=\"12\" height=\"12\" fill=\"%s\" rx=\"2\"/>\n",
+			lx, svgH-16, color))
+		sb.WriteString(fmt.Sprintf("<text x=\"%d\" y=\"%d\" fill=\"#0A1628\" font-size=\"12\" font-family=\"-apple-system,sans-serif\">%s</text>\n",
+			lx+16, svgH-5, html.EscapeString(headers[col])))
+	}
+
+	sb.WriteString("</svg>\n")
+	return sb.String()
+}
+
+// parseCSVFloat parses a string as float64, handling commas as thousands separators
+func parseCSVFloat(s string) float64 {
+	s = strings.TrimSpace(s)
+	s = strings.ReplaceAll(s, ",", "")
+	var val float64
+	fmt.Sscanf(s, "%f", &val)
+	return val
 }
 
 // formatMarkdownHTML renders markdown content as HTML
@@ -1169,6 +1453,49 @@ br { display: block; content: ""; margin: 0.3rem 0; }
 
 /* Highlight in page */
 .search-highlight { background: #DBEAFE; border-radius: 2px; }
+
+/* --- CSV --- */
+.csv-meta {
+  color: #64748B;
+  font-size: 13px;
+  margin-bottom: 0.5rem;
+  font-family: 'JetBrains Mono', monospace;
+}
+.csv-row-count {
+  color: #64748B;
+  font-size: 12px;
+  margin-bottom: 0.5rem;
+}
+.csv-chart {
+  margin: 1rem 0;
+  border: 1px solid #E2E8F0;
+  border-radius: 6px;
+  padding: 1rem;
+  background: #FFFFFF;
+}
+.csv-svg {
+  width: 100%;
+  height: auto;
+  max-height: 300px;
+}
+.csv-table .filter-row th {
+  padding: 0.3rem 0.4rem;
+  background: #FFFFFF;
+  border-bottom: 1px solid #E2E8F0;
+}
+.col-filter {
+  width: 100%;
+  padding: 0.25rem 0.4rem;
+  font-size: 12px;
+  font-family: 'Inter', sans-serif;
+  border: 1px solid #E2E8F0;
+  border-radius: 3px;
+  background: #F8FAFC;
+  color: #0A1628;
+  outline: none;
+  box-sizing: border-box;
+}
+.col-filter:focus { border-color: #3B82F6; }
 `
 }
 
@@ -1521,6 +1848,50 @@ function toggleHunk(id) {
     }
   });
 })();
+` + csvFilterScript()
+}
+
+// csvFilterScript returns JavaScript for CSV column filtering
+func csvFilterScript() string {
+	return `
+/* --- CSV column filter --- */
+(function() {
+  var filters = document.querySelectorAll('.col-filter');
+  if (filters.length === 0) return;
+  var table = document.getElementById('csv-table');
+  if (!table) return;
+  var tbody = table.querySelector('tbody');
+  var countEl = document.getElementById('csv-row-count');
+  var totalRows = tbody ? tbody.querySelectorAll('tr').length : 0;
+
+  function applyFilters() {
+    var rows = tbody.querySelectorAll('tr');
+    var visible = 0;
+    rows.forEach(function(row) {
+      var show = true;
+      filters.forEach(function(f) {
+        var col = parseInt(f.getAttribute('data-col'));
+        var val = f.value.toLowerCase();
+        if (val && row.children[col]) {
+          var cell = row.children[col].textContent.toLowerCase();
+          if (cell.indexOf(val) === -1) show = false;
+        }
+      });
+      row.style.display = show ? '' : 'none';
+      if (show) visible++;
+    });
+    if (countEl) countEl.textContent = 'Showing ' + visible + ' of ' + totalRows + ' rows';
+  }
+
+  filters.forEach(function(f) {
+    f.addEventListener('input', applyFilters);
+  });
+
+  // Prevent search overlay from opening when typing in filter
+  filters.forEach(function(f) {
+    f.addEventListener('keydown', function(e) { e.stopPropagation(); });
+  });
+})();
 `
 }
 
@@ -1762,5 +2133,5 @@ function toggleHunk(id) {
     }
   });
 })();
-`
+` + csvFilterScript()
 }
