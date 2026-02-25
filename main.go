@@ -41,12 +41,14 @@ type fileType struct {
 var fileTypes = map[string]fileType{
 	"md":    {name: "markdown", extensions: []string{".md", ".markdown"}},
 	"img":   {name: "image", extensions: imageExtensions},
+	"vid":   {name: "video", extensions: videoExtensions},
 	"txt":   {name: "text", extensions: []string{".txt", ".log"}},
 	"json":  {name: "json", extensions: []string{".json"}},
 	"yaml":  {name: "yaml", extensions: []string{".yaml", ".yml"}},
 	"diff":  {name: "diff", extensions: []string{".diff", ".patch"}},
 	"jsonl": {name: "jsonl", extensions: []string{".jsonl"}},
 	"csv":   {name: "csv", extensions: []string{".csv", ".tsv"}},
+	"lit":   {name: "literate", extensions: []string{".lit"}},
 }
 
 func detectTerminalWidth() int {
@@ -107,6 +109,7 @@ func detectFileType(filePath string) string {
 // detectParser selects the appropriate parser based on file extension
 func detectParser(filePath string) Parser {
 	parsers := []Parser{
+		&LitParser{},
 		&TodoParser{},
 		&DiffParser{},
 		&CsvParser{},
@@ -311,6 +314,12 @@ func viewFile(filePath string) {
 		return
 	}
 
+	if detectFileType(filePath) == "lit" && servePort > 0 {
+		AddRecent(filePath)
+		serveLit(filePath, servePort)
+		return
+	}
+
 	if detectFileType(filePath) == "img" {
 		AddRecent(filePath)
 		if exportHTML {
@@ -322,6 +331,20 @@ func viewFile(filePath string) {
 			return
 		}
 		viewImage(filePath)
+		return
+	}
+
+	if detectFileType(filePath) == "vid" {
+		AddRecent(filePath)
+		if exportHTML {
+			exportVideoHTML(filePath)
+			return
+		}
+		if servePort > 0 {
+			serveVideoHTML(filePath, servePort)
+			return
+		}
+		viewVideo(filePath)
 		return
 	}
 	viewTextFile(filePath, forceType, false)
@@ -340,6 +363,35 @@ func exportImageHTML(filePath string) {
 	dataURI := fmt.Sprintf("data:%s;base64,%s", mime, b64)
 	title := filepath.Base(filePath)
 	fmt.Print(RenderStaticImageHTML(title, dataURI))
+}
+
+// exportVideoHTML reads a video file and outputs a self-contained HTML page to stdout
+func exportVideoHTML(filePath string) {
+	info, err := os.Stat(filePath)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Error: Could not stat file '%s': %v\n", filePath, err)
+		os.Exit(1)
+	}
+	title := filepath.Base(filePath)
+	ext := filepath.Ext(filePath)
+	mime := videoMIME(ext)
+
+	const maxInlineSize = 10 * 1024 * 1024 // 10MB
+	if info.Size() >= maxInlineSize {
+		fmt.Fprintf(os.Stderr, "Warning: %s is %dMB, too large to inline as base64. Referencing file path.\n",
+			title, info.Size()/(1024*1024))
+		fmt.Print(RenderStaticVideoHTML(title, filePath, mime, false))
+		return
+	}
+
+	data, err := os.ReadFile(filePath)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Error: Could not read file '%s': %v\n", filePath, err)
+		os.Exit(1)
+	}
+	b64 := base64.StdEncoding.EncodeToString(data)
+	dataURI := fmt.Sprintf("data:%s;base64,%s", mime, b64)
+	fmt.Print(RenderStaticVideoHTML(title, dataURI, mime, true))
 }
 
 // listDirectory prints a formatted table of markdown files in a directory
@@ -607,6 +659,7 @@ func printUsage() {
 	fmt.Fprintln(w, "  Transcripts     .jsonl")
 	fmt.Fprintln(w, "  CSV/TSV         .csv .tsv")
 	fmt.Fprintln(w, "  Images          .png .jpg .gif .webp .bmp .svg")
+	fmt.Fprintln(w, "  Video           .mp4 .webm .mov .mkv")
 	fmt.Fprintln(w)
 	fmt.Fprintln(w, "Navigation:")
 	fmt.Fprintln(w, "  j / k             Scroll down / up")
@@ -774,6 +827,15 @@ func runSubcommand(typeName string, ft fileType, args []string) {
 	if typeName == "img" {
 		AddRecent(filePath)
 		viewImage(filePath)
+	} else if typeName == "vid" {
+		AddRecent(filePath)
+		if exportHTML {
+			exportVideoHTML(filePath)
+		} else if servePort > 0 {
+			serveVideoHTML(filePath, servePort)
+		} else {
+			viewVideo(filePath)
+		}
 	} else {
 		viewTextFile(filePath, typeName, follow)
 	}
