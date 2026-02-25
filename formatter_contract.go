@@ -213,33 +213,10 @@ func RenderContractHTMLPage(title string, content string, fm Frontmatter) string
 		sb.WriteString(renderClauseBodyHTML(clause.Body))
 		sb.WriteString("</div>\n")
 
-		// Oberon action line - looks like plain text, each word is executable
+		// Oberon command line - a blank contenteditable text area.
+		// No buttons. Type a command, press Enter. The system interprets.
 		clauseID := html.EscapeString(clause.ID)
-		sb.WriteString("<div class=\"clause-actions\" id=\"actions-" + clauseID + "\">\n")
-		sb.WriteString(fmt.Sprintf("<span class=\"cmd\" data-cmd=\"accept\" data-clause=\"%s\" onclick=\"execCmd(this)\">Accept</span>", clauseID))
-		sb.WriteString(fmt.Sprintf("<span class=\"cmd-sep\">|</span>"))
-		sb.WriteString(fmt.Sprintf("<span class=\"cmd\" data-cmd=\"reject\" data-clause=\"%s\" onclick=\"execCmd(this)\">Reject</span>", clauseID))
-		sb.WriteString(fmt.Sprintf("<span class=\"cmd-sep\">|</span>"))
-		sb.WriteString(fmt.Sprintf("<span class=\"cmd\" data-cmd=\"counter\" data-clause=\"%s\" onclick=\"execCmd(this)\">Counter: ___</span>", clauseID))
-		sb.WriteString(fmt.Sprintf("<span class=\"cmd-sep\">|</span>"))
-		sb.WriteString(fmt.Sprintf("<span class=\"cmd\" data-cmd=\"comment\" data-clause=\"%s\" onclick=\"execCmd(this)\">Comment: ___</span>", clauseID))
-		sb.WriteString("\n</div>\n")
-
-		// Inline input (hidden by default, shown for counter/comment)
-		sb.WriteString(fmt.Sprintf("<div class=\"clause-input hidden\" id=\"input-%s\">\n", clauseID))
-		sb.WriteString(fmt.Sprintf("<input type=\"text\" id=\"input-field-%s\" placeholder=\"Type here...\" onkeydown=\"if(event.key==='Enter')submitInput('%s')\">\n", clauseID, clauseID))
-		sb.WriteString(fmt.Sprintf("<span class=\"cmd\" onclick=\"submitInput('%s')\">Submit</span>", clauseID))
-		sb.WriteString(fmt.Sprintf("<span class=\"cmd-sep\">|</span>"))
-		sb.WriteString(fmt.Sprintf("<span class=\"cmd\" onclick=\"cancelInput('%s')\">Cancel</span>", clauseID))
-		sb.WriteString("\n</div>\n")
-
-		// Note display (shown when counter/comment has been submitted)
-		sb.WriteString(fmt.Sprintf("<div class=\"clause-note hidden\" id=\"note-%s\">\n", clauseID))
-		sb.WriteString(fmt.Sprintf("<span class=\"note-text\" id=\"note-text-%s\"></span>\n", clauseID))
-		sb.WriteString(fmt.Sprintf("<span class=\"cmd\" onclick=\"editNote('%s')\">Edit</span>", clauseID))
-		sb.WriteString(fmt.Sprintf("<span class=\"cmd-sep\">|</span>"))
-		sb.WriteString(fmt.Sprintf("<span class=\"cmd\" onclick=\"clearClause('%s')\">Clear</span>", clauseID))
-		sb.WriteString("\n</div>\n")
+		sb.WriteString(fmt.Sprintf("<div class=\"cmdline\" contenteditable=\"true\" data-clause=\"%s\" id=\"cmdline-%s\" spellcheck=\"false\"></div>\n", clauseID, clauseID))
 
 		sb.WriteString("</section>\n")
 	}
@@ -534,87 +511,41 @@ body {
 }
 
 /* --- Oberon command line --- */
-.clause-actions {
+.cmdline {
   margin-top: 0.75rem;
-  padding-top: 0.5rem;
+  padding: 4px 6px;
   font-family: 'JetBrains Mono', monospace;
   font-size: 13px;
-  user-select: none;
-}
-
-.cmd {
-  color: #94A3B8;
-  cursor: pointer;
-  padding: 2px 4px;
-  border-radius: 2px;
-  transition: color 0.15s, background 0.15s;
-}
-
-.cmd:hover {
-  color: #3B82F6;
-  background: #F1F5F9;
-}
-
-.cmd.active {
-  color: #0A1628;
-  font-weight: 600;
-}
-
-.cmd-sep {
-  color: #E2E8F0;
-  margin: 0 0.25rem;
-  user-select: none;
-}
-
-/* --- Inline input --- */
-.clause-input {
-  margin-top: 0.5rem;
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  font-family: 'JetBrains Mono', monospace;
-  font-size: 13px;
-}
-
-.clause-input input {
-  flex: 1;
-  border: none;
-  border-bottom: 1px solid #E2E8F0;
-  outline: none;
-  font-family: 'JetBrains Mono', monospace;
-  font-size: 13px;
-  padding: 4px 2px;
-  color: #0A1628;
-  background: transparent;
-}
-
-.clause-input input:focus {
-  border-bottom-color: #3B82F6;
-}
-
-.clause-input input::placeholder {
-  color: #CBD5E1;
-}
-
-/* --- Note display --- */
-.clause-note {
-  margin-top: 0.5rem;
-  font-family: 'JetBrains Mono', monospace;
-  font-size: 13px;
-  display: flex;
-  align-items: baseline;
-  gap: 0.75rem;
-}
-
-.note-text {
   color: #64748B;
-  font-style: italic;
+  min-height: 1.6em;
+  border-bottom: 1px solid transparent;
+  outline: none;
+  transition: border-color 0.15s, color 0.15s;
+  white-space: pre-wrap;
+  word-break: break-word;
 }
 
-.note-text::before {
-  content: '> ';
+.cmdline:focus {
+  border-bottom-color: #E2E8F0;
+  color: #0A1628;
+}
+
+/* Placeholder when empty: shows available commands as ghost text */
+.cmdline:empty::before {
+  content: 'accept  reject  counter: ...  @name ...  clear';
+  color: #E2E8F0;
+  pointer-events: none;
+}
+
+.cmdline:focus:empty::before {
   color: #CBD5E1;
 }
+
+/* Command line state colors */
+.cmdline-accepted { color: #166534; }
+.cmdline-rejected { color: #991B1B; }
+.cmdline-countered { color: #92400E; }
+.cmdline-commented { color: #1E40AF; }
 
 /* --- Utility --- */
 .hidden { display: none !important; }
@@ -652,7 +583,7 @@ body {
 `
 }
 
-// contractScript returns the Oberon interaction JavaScript
+// contractScript returns the Oberon command interpreter JavaScript
 func contractScript(title string, clauseCount int) string {
 	return fmt.Sprintf(`
 var STORAGE_KEY = 'contract:%s';
@@ -669,78 +600,100 @@ function saveState(state) {
   localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
 }
 
-var pendingCmd = {};
+// --- Command interpreter ---
+// Parse free-form text into a structured action.
+// No fixed vocabulary. The system figures out what you meant.
+function parseCommand(text) {
+  text = text.trim();
+  if (!text) return null;
+  var lower = text.toLowerCase();
 
-function execCmd(el) {
-  var cmd = el.dataset.cmd;
-  var clauseId = el.dataset.clause;
-
-  if (cmd === 'accept' || cmd === 'reject') {
-    var state = getState();
-    // Toggle: clicking same status clears it
-    if (state[clauseId] && state[clauseId].status === cmd) {
-      delete state[clauseId];
-    } else {
-      state[clauseId] = { status: cmd, note: '' };
-    }
-    saveState(state);
-    render();
-  } else if (cmd === 'counter' || cmd === 'comment') {
-    pendingCmd[clauseId] = cmd;
-    var inputDiv = document.getElementById('input-' + clauseId);
-    var inputField = document.getElementById('input-field-' + clauseId);
-    inputDiv.classList.remove('hidden');
-    inputField.placeholder = cmd === 'counter' ? 'Counter-proposal...' : 'Your comment...';
-    // Pre-fill if existing note
-    var state = getState();
-    if (state[clauseId] && state[clauseId].note) {
-      inputField.value = state[clauseId].note;
-    } else {
-      inputField.value = '';
-    }
-    inputField.focus();
+  // Accept
+  if (/^(accept|a|ok|approve|yes|lgtm|agreed|ack)$/i.test(text)) {
+    return { status: 'accepted', note: '' };
   }
+
+  // Reject
+  if (/^(reject|r|x|no|decline|nack|disagree|remove)$/i.test(text)) {
+    return { status: 'rejected', note: '' };
+  }
+
+  // Counter: explicit prefix
+  var m = text.match(/^(?:counter|c|revise|propose|amend|change)[\s:]+(.+)/i);
+  if (m) {
+    return { status: 'countered', note: m[1].trim() };
+  }
+
+  // Mention: @name ...
+  if (/^@\w+/.test(text)) {
+    return { status: 'commented', note: text };
+  }
+
+  // Comment: explicit prefix
+  m = text.match(/^(?:comment|note|todo|fixme|nb)[\s:]+(.+)/i);
+  if (m) {
+    return { status: 'commented', note: m[1].trim() };
+  }
+
+  // Flag
+  if (/^(flag|review|flag for review|needs review|escalate)$/i.test(text)) {
+    return { status: 'commented', note: 'flagged for review' };
+  }
+
+  // Clear
+  if (/^(clear|reset|undo|delete|remove action)$/i.test(text)) {
+    return { _clear: true };
+  }
+
+  // Anything else: treat as a comment. All text is a valid command.
+  return { status: 'commented', note: text };
 }
 
-function submitInput(clauseId) {
-  var inputField = document.getElementById('input-field-' + clauseId);
-  var text = inputField.value.trim();
-  if (!text) return;
-
-  var cmd = pendingCmd[clauseId] || 'comment';
+// --- Execute command on a clause ---
+function execOnClause(clauseId, text) {
+  var result = parseCommand(text);
   var state = getState();
-  state[clauseId] = { status: cmd === 'counter' ? 'countered' : 'commented', note: text };
+
+  if (!result) return;
+
+  if (result._clear) {
+    delete state[clauseId];
+  } else {
+    state[clauseId] = result;
+  }
+
   saveState(state);
-  delete pendingCmd[clauseId];
   render();
 }
 
-function cancelInput(clauseId) {
-  var inputDiv = document.getElementById('input-' + clauseId);
-  inputDiv.classList.add('hidden');
-  delete pendingCmd[clauseId];
-}
+// --- Enter key executes the command line ---
+document.addEventListener('keydown', function(e) {
+  if (!e.target.classList.contains('cmdline')) return;
 
-function editNote(clauseId) {
-  var state = getState();
-  var entry = state[clauseId];
-  if (!entry) return;
-  pendingCmd[clauseId] = entry.status === 'countered' ? 'counter' : 'comment';
-  var inputDiv = document.getElementById('input-' + clauseId);
-  var inputField = document.getElementById('input-field-' + clauseId);
-  var noteDiv = document.getElementById('note-' + clauseId);
-  noteDiv.classList.add('hidden');
-  inputDiv.classList.remove('hidden');
-  inputField.value = entry.note;
-  inputField.focus();
-}
+  if (e.key === 'Enter') {
+    e.preventDefault();
+    var clauseId = e.target.dataset.clause;
+    var text = e.target.innerText.trim();
+    if (text) {
+      // Blur first so render() can update the text content
+      e.target.blur();
+      execOnClause(clauseId, text);
+    }
+  }
 
-function clearClause(clauseId) {
-  var state = getState();
-  delete state[clauseId];
-  saveState(state);
-  render();
-}
+  // Escape: blur the command line
+  if (e.key === 'Escape') {
+    e.target.blur();
+  }
+});
+
+// Prevent pasting rich text into command line
+document.addEventListener('paste', function(e) {
+  if (!e.target.classList.contains('cmdline')) return;
+  e.preventDefault();
+  var text = (e.clipboardData || window.clipboardData).getData('text/plain');
+  document.execCommand('insertText', false, text);
+});
 
 function clearAll() {
   if (!confirm('Clear all redline actions?')) return;
@@ -773,6 +726,13 @@ function exportRedline() {
   });
 }
 
+function escapeHtml(text) {
+  var div = document.createElement('div');
+  div.textContent = text;
+  return div.innerHTML;
+}
+
+// --- Render: sync DOM with state ---
 function render() {
   var state = getState();
 
@@ -781,8 +741,6 @@ function render() {
   var reviewed = 0;
   Object.keys(state).forEach(function(id) {
     var s = state[id].status;
-    if (s === 'accept') s = 'accepted';
-    if (s === 'reject') s = 'rejected';
     if (counts[s] !== undefined) counts[s]++;
     reviewed++;
   });
@@ -801,19 +759,15 @@ function render() {
   });
   keys.forEach(function(id) {
     var entry = state[id];
-    var status = entry.status;
-    if (status === 'accept') status = 'accepted';
-    if (status === 'reject') status = 'rejected';
     var section = document.getElementById('clause-' + id);
     var heading = section ? section.querySelector('.clause-heading') : null;
     var shortTitle = id + '. ' + (heading ? heading.textContent.replace(/\s+/g, ' ').trim().replace(/^\d+\.\s*/, '') : '');
-    // Truncate
     if (shortTitle.length > 30) shortTitle = shortTitle.substring(0, 28) + '...';
 
     var item = document.createElement('a');
-    item.className = 'sidebar-item ' + status;
+    item.className = 'sidebar-item ' + entry.status;
     item.href = '#clause-' + id;
-    item.innerHTML = '<span class="item-clause">' + shortTitle + '</span>';
+    item.innerHTML = '<span class="item-clause">' + escapeHtml(shortTitle) + '</span>';
     if (entry.note) {
       item.innerHTML += '<span class="item-note">' + escapeHtml(entry.note) + '</span>';
     }
@@ -825,113 +779,88 @@ function render() {
     var id = section.dataset.clauseId;
     var entry = state[id];
     var badge = document.getElementById('badge-' + id);
-    var noteDiv = document.getElementById('note-' + id);
-    var noteText = document.getElementById('note-text-' + id);
-    var inputDiv = document.getElementById('input-' + id);
+    var cmdline = document.getElementById('cmdline-' + id);
+    var isFocused = document.activeElement === cmdline;
 
-    // Reset
+    // Reset visual state
     section.classList.remove('state-accepted', 'state-rejected', 'state-countered', 'state-commented');
     badge.textContent = '';
     badge.className = 'clause-badge';
-    noteDiv.classList.add('hidden');
-    if (!pendingCmd[id]) inputDiv.classList.add('hidden');
-
-    // Highlight active cmd
-    var actions = document.getElementById('actions-' + id);
-    actions.querySelectorAll('.cmd').forEach(function(cmd) { cmd.classList.remove('active'); });
+    cmdline.classList.remove('cmdline-accepted', 'cmdline-rejected', 'cmdline-countered', 'cmdline-commented');
 
     if (entry) {
-      var status = entry.status;
-      if (status === 'accept') status = 'accepted';
-      if (status === 'reject') status = 'rejected';
+      section.classList.add('state-' + entry.status);
+      badge.textContent = entry.status;
+      badge.classList.add('badge-' + entry.status);
+      cmdline.classList.add('cmdline-' + entry.status);
 
-      section.classList.add('state-' + status);
-      badge.textContent = status;
-      badge.classList.add('badge-' + status);
-
-      // Highlight the active command
-      var cmdName = entry.status;
-      if (cmdName === 'accepted') cmdName = 'accept';
-      if (cmdName === 'rejected') cmdName = 'reject';
-      if (cmdName === 'countered') cmdName = 'counter';
-      if (cmdName === 'commented') cmdName = 'comment';
-      var activeCmd = actions.querySelector('[data-cmd="' + cmdName + '"]');
-      if (activeCmd) activeCmd.classList.add('active');
-
-      if (entry.note) {
-        noteDiv.classList.remove('hidden');
-        noteText.textContent = entry.note;
+      // Show the executed command as editable text in the command line.
+      // Don't overwrite if user is actively editing.
+      if (!isFocused) {
+        if (entry.note) {
+          // Show the original command form so user can edit and re-execute
+          if (entry.status === 'countered') {
+            cmdline.textContent = 'counter: ' + entry.note;
+          } else {
+            cmdline.textContent = entry.note;
+          }
+        } else {
+          cmdline.textContent = entry.status === 'accepted' ? 'accept' : 'reject';
+        }
+      }
+    } else {
+      // Clear the command line if not focused
+      if (!isFocused) {
+        cmdline.textContent = '';
       }
     }
   });
 }
 
-function escapeHtml(text) {
-  var div = document.createElement('div');
-  div.textContent = text;
-  return div.innerHTML;
-}
-
-// Keyboard shortcut: navigate clauses with j/k, accept with a, reject with r
+// --- Keyboard nav: j/k to move between clauses, Enter focuses cmdline ---
 var focusedClause = -1;
-var clauses = document.querySelectorAll('.clause');
+var allClauses = document.querySelectorAll('.clause');
 
 function highlightFocused() {
-  clauses.forEach(function(c, i) {
+  allClauses.forEach(function(c, i) {
     c.style.outline = (i === focusedClause) ? '2px solid #3B82F6' : 'none';
     c.style.outlineOffset = (i === focusedClause) ? '-2px' : '0';
   });
 }
 
 document.addEventListener('keydown', function(e) {
+  // Skip if inside a command line or input
+  if (e.target.classList && e.target.classList.contains('cmdline')) return;
   if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
 
-  var id;
   switch(e.key) {
     case 'j':
       if (focusedClause < 0) focusedClause = 0;
-      else focusedClause = Math.min(focusedClause + 1, clauses.length - 1);
-      clauses[focusedClause].scrollIntoView({ behavior: 'smooth', block: 'center' });
+      else focusedClause = Math.min(focusedClause + 1, allClauses.length - 1);
+      allClauses[focusedClause].scrollIntoView({ behavior: 'smooth', block: 'center' });
       highlightFocused();
       break;
     case 'k':
       if (focusedClause < 0) focusedClause = 0;
       else focusedClause = Math.max(focusedClause - 1, 0);
-      clauses[focusedClause].scrollIntoView({ behavior: 'smooth', block: 'center' });
+      allClauses[focusedClause].scrollIntoView({ behavior: 'smooth', block: 'center' });
       highlightFocused();
       break;
-    case 'a':
+    case 'Enter':
+      // Focus the command line of the current clause
       if (focusedClause >= 0) {
-        id = clauses[focusedClause].dataset.clauseId;
-        var state = getState();
-        state[id] = { status: 'accept', note: '' };
-        saveState(state);
-        render();
+        e.preventDefault();
+        var id = allClauses[focusedClause].dataset.clauseId;
+        var cmdline = document.getElementById('cmdline-' + id);
+        cmdline.focus();
+        // Place cursor at end
+        var range = document.createRange();
+        range.selectNodeContents(cmdline);
+        range.collapse(false);
+        var sel = window.getSelection();
+        sel.removeAllRanges();
+        sel.addRange(range);
       }
-      break;
-    case 'x':
-      if (focusedClause >= 0) {
-        id = clauses[focusedClause].dataset.clauseId;
-        var state = getState();
-        state[id] = { status: 'reject', note: '' };
-        saveState(state);
-        render();
-      }
-      break;
-    case 'c':
-      if (focusedClause >= 0) {
-        id = clauses[focusedClause].dataset.clauseId;
-        pendingCmd[id] = 'counter';
-        var inputDiv = document.getElementById('input-' + id);
-        var inputField = document.getElementById('input-field-' + id);
-        inputDiv.classList.remove('hidden');
-        inputField.placeholder = 'Counter-proposal...';
-        inputField.value = '';
-        inputField.focus();
-      }
-      break;
-    case 'Escape':
-      Object.keys(pendingCmd).forEach(function(id) { cancelInput(id); });
       break;
   }
 });
