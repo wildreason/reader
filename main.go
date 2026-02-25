@@ -2,6 +2,7 @@ package main
 
 import (
 	"bufio"
+	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -25,6 +26,12 @@ var showLineNumbers bool
 // servePort enables HTTP server mode (--port N flag)
 var servePort int
 
+// exportHTML enables static HTML export to stdout (--html flag)
+var exportHTML bool
+
+// forceType overrides content type detection (-t TYPE flag)
+var forceType string
+
 // fileType defines a supported file type with its extensions
 type fileType struct {
 	name       string
@@ -36,6 +43,7 @@ var fileTypes = map[string]fileType{
 	"img":   {name: "image", extensions: imageExtensions},
 	"txt":   {name: "text", extensions: []string{".txt", ".log"}},
 	"json":  {name: "json", extensions: []string{".json"}},
+	"yaml":  {name: "yaml", extensions: []string{".yaml", ".yml"}},
 	"diff":  {name: "diff", extensions: []string{".diff", ".patch"}},
 	"jsonl": {name: "jsonl", extensions: []string{".jsonl"}},
 }
@@ -120,7 +128,9 @@ func detectParserFromContent(content string) Parser {
 		return &DiffParser{}
 	}
 
+	// Count JSON lines to distinguish JSONL from single JSON
 	lines := strings.Split(content, "\n")
+	jsonLineCount := 0
 	for _, line := range lines {
 		line = strings.TrimSpace(line)
 		if line == "" {
@@ -128,9 +138,23 @@ func detectParserFromContent(content string) Parser {
 		}
 		var testJSON map[string]interface{}
 		if err := json.Unmarshal([]byte(line), &testJSON); err == nil {
-			return &JSONLParser{}
+			jsonLineCount++
+		} else {
+			break
 		}
-		break
+	}
+	if jsonLineCount >= 2 {
+		return &JSONLParser{}
+	}
+
+	// JSON object/array -> plain text (preserves structure)
+	if isJSON(content) {
+		return &TxtParser{}
+	}
+
+	// YAML -> plain text (preserves structure)
+	if isYAML(content) {
+		return &TxtParser{}
 	}
 
 	return &MarkdownParser{}
@@ -269,16 +293,103 @@ func resolveShortcut(arg string, exts []string) string {
 
 // viewFile routes to the correct viewer based on file type
 func viewFile(filePath string) {
-	if detectFileType(filePath) == "img" {
+	// Check if path is a directory
+	info, err := os.Stat(filePath)
+	if err == nil && info.IsDir() {
 		if servePort > 0 {
-			fmt.Fprintf(os.Stderr, "Error: --port does not support image files\n")
-			os.Exit(1)
+			serveDirectory(filePath, servePort)
+		} else {
+			listDirectory(filePath)
 		}
+		return
+	}
+
+	if detectFileType(filePath) == "img" {
 		AddRecent(filePath)
+		if exportHTML {
+			exportImageHTML(filePath)
+			return
+		}
+		if servePort > 0 {
+			serveImageHTML(filePath, servePort)
+			return
+		}
 		viewImage(filePath)
 		return
 	}
-	viewTextFile(filePath, "", false)
+	viewTextFile(filePath, forceType, false)
+}
+
+// exportImageHTML reads an image file and outputs a self-contained HTML page to stdout
+func exportImageHTML(filePath string) {
+	data, err := os.ReadFile(filePath)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Error: Could not read file '%s': %v\n", filePath, err)
+		os.Exit(1)
+	}
+	ext := filepath.Ext(filePath)
+	mime := imageMIME(ext)
+	b64 := base64.StdEncoding.EncodeToString(data)
+	dataURI := fmt.Sprintf("data:%s;base64,%s", mime, b64)
+	title := filepath.Base(filePath)
+	fmt.Print(RenderStaticImageHTML(title, dataURI))
+}
+
+// listDirectory prints a formatted table of markdown files in a directory
+func listDirectory(dirPath string) {
+	files, _ := filepath.Glob(filepath.Join(dirPath, "*.md"))
+	if len(files) == 0 {
+		fmt.Fprintf(os.Stderr, "No markdown files found in %s\n", dirPath)
+		os.Exit(0)
+	}
+
+	type entry struct {
+		title   string
+		created string
+		tags    string
+		path    string
+	}
+
+	var entries []entry
+	maxTitle := 5 // "TITLE"
+
+	for _, f := range files {
+		content, err := os.ReadFile(f)
+		if err != nil {
+			continue
+		}
+		fm, _ := ParseFrontmatter(string(content))
+		title := filepath.Base(f)
+		if fm.Title != "" {
+			title = fm.Title
+		}
+		created := fm.Created
+		tags := ""
+		if len(fm.Tags) > 0 {
+			tags = strings.Join(fm.Tags, ", ")
+		}
+		if len(title) > maxTitle {
+			maxTitle = len(title)
+		}
+		entries = append(entries, entry{title: title, created: created, tags: tags, path: f})
+	}
+
+	// Sort by created desc
+	for i := 0; i < len(entries); i++ {
+		for j := i + 1; j < len(entries); j++ {
+			if entries[j].created > entries[i].created {
+				entries[i], entries[j] = entries[j], entries[i]
+			}
+		}
+	}
+
+	// Print header
+	fmt.Printf("%-*s  %-12s  %s\n", maxTitle, "TITLE", "CREATED", "TAGS")
+	fmt.Printf("%-*s  %-12s  %s\n", maxTitle, strings.Repeat("-", maxTitle), "------------", "----")
+
+	for _, e := range entries {
+		fmt.Printf("%-*s  %-12s  %s\n", maxTitle, e.title, e.created, e.tags)
+	}
 }
 
 // viewTextFile reads a file and renders it in the TUI
@@ -309,6 +420,8 @@ func viewTextFile(filePath string, forceType string, follow bool) {
 			parser = &TodoParser{}
 		case "txt":
 			parser = &TxtParser{}
+		case "yaml":
+			parser = &TxtParser{}
 		}
 	} else {
 		parser = detectParser(filePath)
@@ -317,6 +430,39 @@ func viewTextFile(filePath string, forceType string, follow bool) {
 
 	if follow && servePort == 0 {
 		runFollowMode(filePath, fileContent, isJSONL, termWidth, "auto", BorderNone)
+		return
+	}
+
+	// Static HTML export
+	if exportHTML {
+		var blocks []Block
+		if isJSONL {
+			blocks = parser.Parse(fileContent)
+		} else {
+			contentType := BlockContentPlain
+			if forceType == "json" || detectFileType(filePath) == "json" {
+				contentType = BlockContentJSON
+			} else if forceType == "yaml" || detectFileType(filePath) == "yaml" {
+				contentType = BlockContentYAML
+			}
+			blocks = []Block{{
+				Name:        filepath.Base(filePath),
+				Content:     fileContent,
+				Pages:       []string{fileContent},
+				TotalPages:  1,
+				ContentType: contentType,
+			}}
+		}
+		title := filepath.Base(filePath)
+		fm, body := ParseFrontmatter(fileContent)
+		if fm.Title != "" {
+			title = fm.Title
+		}
+		if !isJSONL {
+			blocks[0].Content = body
+			blocks[0].Pages = []string{body}
+		}
+		fmt.Print(RenderStaticHTMLPage(title, blocks, showLineNumbers))
 		return
 	}
 
@@ -330,12 +476,18 @@ func viewTextFile(filePath string, forceType string, follow bool) {
 			blocks = jsonlParser.Parse(fileContent)
 		} else {
 			// Single block: let HTML render h1/h2/h3 directly instead of splitting by headers
+			contentType := BlockContentPlain
+			if forceType == "json" || detectFileType(filePath) == "json" {
+				contentType = BlockContentJSON
+			} else if forceType == "yaml" || detectFileType(filePath) == "yaml" {
+				contentType = BlockContentYAML
+			}
 			blocks = []Block{{
 				Name:        filepath.Base(filePath),
 				Content:     fileContent,
 				Pages:       []string{fileContent},
 				TotalPages:  1,
-				ContentType: BlockContentPlain,
+				ContentType: contentType,
 			}}
 		}
 		serveHTML(filePath, blocks, servePort)
@@ -378,6 +530,8 @@ func viewStdinContent(content string, forceType string) {
 			parser = &TodoParser{}
 		case "txt":
 			parser = &TxtParser{}
+		case "yaml":
+			parser = &TxtParser{}
 		default:
 			parser = &MarkdownParser{}
 		}
@@ -399,6 +553,18 @@ func viewStdinContent(content string, forceType string) {
 		blocks = parser.Parse(content)
 	}
 
+	// Static HTML export
+	if exportHTML {
+		fmt.Print(RenderStaticHTMLPage("stdin", blocks, showLineNumbers))
+		return
+	}
+
+	// Web mode: serve as HTML
+	if servePort > 0 {
+		serveHTML("stdin", blocks, servePort)
+		return
+	}
+
 	runReaderMode(blocks, "stdin", termWidth, "auto", BorderNone)
 }
 
@@ -411,6 +577,12 @@ func printUsage() {
 	fmt.Fprintln(w, "  aster <file>          View file (auto-detect format)")
 	fmt.Fprintln(w, "  aster pick            Pick from recent files")
 	fmt.Fprintln(w, "  aster latest          Open newest file in current directory")
+	fmt.Fprintln(w)
+	fmt.Fprintln(w, "Flags:")
+	fmt.Fprintln(w, "  -n                    Show source file line numbers")
+	fmt.Fprintln(w, "  -t TYPE               Force content type (md, json, jsonl, diff, txt, yaml)")
+	fmt.Fprintln(w, "  --port N              Serve rendered HTML on localhost:N")
+	fmt.Fprintln(w, "  --html                Export self-contained HTML to stdout")
 	fmt.Fprintln(w)
 	fmt.Fprintln(w, "Supported formats:")
 	fmt.Fprintln(w, "  Markdown        .md .markdown")
@@ -426,6 +598,12 @@ func printUsage() {
 	fmt.Fprintln(w, "  g / G             Top / bottom")
 	fmt.Fprintln(w, "  PgDn / PgUp       Full page down / up")
 	fmt.Fprintln(w, "  q                 Quit")
+	fmt.Fprintln(w)
+	fmt.Fprintln(w, "Piping:")
+	fmt.Fprintln(w, "  git diff HEAD~3 | aster           Auto-detect and render diff")
+	fmt.Fprintln(w, "  curl api.com/data | aster         Auto-detect JSON")
+	fmt.Fprintln(w, "  cat log.jsonl | aster -t jsonl    Force content type")
+	fmt.Fprintln(w, "  aster file.md | head -20          Passthrough when piped out")
 	fmt.Fprintln(w)
 	fmt.Fprintln(w, "Examples:")
 	fmt.Fprintln(w, "  aster readme.md               View markdown with colors and tables")
@@ -443,9 +621,12 @@ func main() {
 	// Parse flags early (before other arg processing)
 	var cleanArgs []string
 	args := os.Args[1:]
+	validTypes := map[string]bool{"md": true, "json": true, "jsonl": true, "diff": true, "txt": true, "yaml": true}
 	for i := 0; i < len(args); i++ {
 		if args[i] == "-n" {
 			showLineNumbers = true
+		} else if args[i] == "--html" {
+			exportHTML = true
 		} else if args[i] == "--port" && i+1 < len(args) {
 			if p, err := parsePositiveInt(args[i+1]); err == nil {
 				servePort = p
@@ -454,6 +635,14 @@ func main() {
 				os.Exit(1)
 			}
 			i++ // skip the port number
+		} else if args[i] == "-t" && i+1 < len(args) {
+			if validTypes[args[i+1]] {
+				forceType = args[i+1]
+			} else {
+				fmt.Fprintf(os.Stderr, "Error: -t requires one of: md, json, jsonl, diff, txt, yaml\n")
+				os.Exit(1)
+			}
+			i++ // skip the type value
 		} else {
 			cleanArgs = append(cleanArgs, args[i])
 		}
@@ -474,6 +663,7 @@ func main() {
 			fmt.Printf("  built:  %s\n", Date)
 			return
 		case first == "pick" || first == "p" || first == "-":
+			TrackUsage("pick")
 			path, err := ShowRecentPicker(nil)
 			if err != nil {
 				fmt.Fprintf(os.Stderr, "Error: %v\n", err)
@@ -482,6 +672,7 @@ func main() {
 			viewFile(path)
 			return
 		case first == "latest" || first == "l" || first == "+":
+			TrackUsage("latest")
 			path, err := GetNewestFile(nil)
 			if err != nil {
 				fmt.Fprintf(os.Stderr, "Error: %v\n", err)
@@ -494,6 +685,7 @@ func main() {
 
 		// Subcommand mode: aster <type> [file|-|+]
 		if ft, ok := fileTypes[first]; ok {
+			TrackUsage(first)
 			runSubcommand(first, ft, os.Args[2:])
 			return
 		}
@@ -506,6 +698,7 @@ func main() {
 		}
 
 		// Default: treat as file path
+		TrackUsage("view")
 		filePath := expandPath(first)
 
 		viewFile(filePath)
@@ -513,13 +706,14 @@ func main() {
 	}
 
 	// No args: try stdin
+	TrackUsage("stdin")
 	if hasStdinData() {
 		content, err := readStdin()
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "Error: %v\n", err)
 			os.Exit(1)
 		}
-		viewStdinContent(content, "")
+		viewStdinContent(content, forceType)
 		return
 	}
 

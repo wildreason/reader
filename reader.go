@@ -7,6 +7,7 @@ import (
 
 	"github.com/gdamore/tcell/v2"
 	"github.com/rivo/tview"
+	"golang.org/x/term"
 )
 
 // renderAllContent renders all blocks and all their pages into a single string
@@ -26,6 +27,14 @@ func renderAllContent(blocks []Block, termWidth int, borderStyle BorderStyle) st
 func runReaderMode(blocks []Block, sourceName string, termWidth int, style string, borderStyle BorderStyle) {
 	if len(blocks) == 0 {
 		fmt.Println("Error: No blocks found in file.")
+		return
+	}
+
+	// Pipe passthrough: if stdout is not a terminal, print plain text and exit
+	if !term.IsTerminal(int(os.Stdout.Fd())) {
+		content := renderAllContent(blocks, termWidth, borderStyle)
+		stripped := stripTviewTags(content)
+		fmt.Print(stripped)
 		return
 	}
 

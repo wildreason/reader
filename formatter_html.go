@@ -6,6 +6,7 @@ import (
 	"html"
 	"regexp"
 	"strings"
+	"time"
 )
 
 // RenderHTMLPage renders blocks as a full HTML document with enhanced web features
@@ -78,6 +79,147 @@ func RenderHTMLPage(title string, blocks []Block, showLineNums bool) string {
 	return sb.String()
 }
 
+// DocMeta holds metadata for a document in directory mode
+type DocMeta struct {
+	Slug    string
+	Title   string
+	Created string
+	Tags    []string
+	ModTime time.Time
+}
+
+// RenderIndexPage renders a directory listing as an HTML page
+func RenderIndexPage(dirName string, docs []DocMeta) string {
+	var sb strings.Builder
+
+	sb.WriteString("<!DOCTYPE html>\n<html lang=\"en\">\n<head>\n")
+	sb.WriteString("<meta charset=\"UTF-8\">\n")
+	sb.WriteString("<meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\">\n")
+	sb.WriteString(fmt.Sprintf("<title>%s</title>\n", html.EscapeString(dirName)))
+	sb.WriteString("<link rel=\"preconnect\" href=\"https://fonts.googleapis.com\">\n")
+	sb.WriteString("<link rel=\"preconnect\" href=\"https://fonts.gstatic.com\" crossorigin>\n")
+	sb.WriteString("<link rel=\"stylesheet\" href=\"https://fonts.googleapis.com/css2?family=Inter:wght@400;600&family=JetBrains+Mono:wght@400;600&display=swap\">\n")
+	sb.WriteString("<style>\n")
+	sb.WriteString(indexCSS())
+	sb.WriteString("</style>\n")
+	sb.WriteString("</head>\n<body>\n")
+
+	sb.WriteString("<main class=\"index-container\">\n")
+	sb.WriteString(fmt.Sprintf("<h1 class=\"index-title\">%s</h1>\n", html.EscapeString(dirName)))
+	sb.WriteString(fmt.Sprintf("<p class=\"index-count\">%d documents</p>\n", len(docs)))
+
+	if len(docs) == 0 {
+		sb.WriteString("<p class=\"index-empty\">No markdown files found.</p>\n")
+	} else {
+		sb.WriteString("<table class=\"index-table\">\n")
+		sb.WriteString("<thead><tr><th>Title</th><th>Created</th><th>Tags</th></tr></thead>\n")
+		sb.WriteString("<tbody>\n")
+		for _, doc := range docs {
+			title := html.EscapeString(doc.Title)
+			slug := html.EscapeString(doc.Slug)
+			created := html.EscapeString(doc.Created)
+			var tagParts []string
+			for _, tag := range doc.Tags {
+				tagParts = append(tagParts, fmt.Sprintf("<span class=\"tag\">%s</span>", html.EscapeString(tag)))
+			}
+			tags := strings.Join(tagParts, " ")
+			sb.WriteString(fmt.Sprintf("<tr><td><a href=\"/%s\">%s</a></td><td class=\"date-col\">%s</td><td>%s</td></tr>\n",
+				slug, title, created, tags))
+		}
+		sb.WriteString("</tbody>\n</table>\n")
+	}
+
+	sb.WriteString("</main>\n")
+
+	// SSE live reload
+	sb.WriteString("<script>\n")
+	sb.WriteString("var es = new EventSource('/events');\n")
+	sb.WriteString("es.onmessage = function(e) { if (e.data === 'reload') location.reload(); };\n")
+	sb.WriteString("es.onerror = function() { setTimeout(function() { location.reload(); }, 2000); };\n")
+	sb.WriteString("</script>\n")
+	sb.WriteString("</body>\n</html>\n")
+
+	return sb.String()
+}
+
+// indexCSS returns CSS for the index page using the brand theme
+func indexCSS() string {
+	return `
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body {
+  background: #FFFFFF;
+  color: #0A1628;
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+  font-weight: 400;
+  font-size: 16px;
+  line-height: 1.7;
+  -webkit-font-smoothing: antialiased;
+}
+.index-container {
+  max-width: 740px;
+  margin: 0 auto;
+  padding: 3rem 1.5rem;
+}
+.index-title {
+  color: #0A1628;
+  font-size: 30px;
+  font-weight: 600;
+  margin-bottom: 0.25rem;
+}
+.index-count {
+  color: #64748B;
+  font-size: 14px;
+  margin-bottom: 2rem;
+}
+.index-empty {
+  color: #64748B;
+  font-size: 14px;
+}
+.index-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 14px;
+}
+.index-table th {
+  text-align: left;
+  padding: 0.5rem 0.75rem;
+  color: #64748B;
+  font-size: 12px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  border-bottom: 2px solid #E2E8F0;
+}
+.index-table td {
+  padding: 0.6rem 0.75rem;
+  border-bottom: 1px solid #F1F5F9;
+  vertical-align: top;
+}
+.index-table tr:hover td { background: #F8FAFC; }
+.index-table a {
+  color: #0A1628;
+  text-decoration: none;
+  font-weight: 600;
+}
+.index-table a:hover { color: #3B82F6; }
+.date-col {
+  color: #64748B;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 13px;
+  white-space: nowrap;
+}
+.tag {
+  display: inline-block;
+  background: #F1F5F9;
+  color: #334155;
+  padding: 0.1rem 0.45rem;
+  border-radius: 3px;
+  font-size: 12px;
+  margin-right: 0.3rem;
+}
+`
+}
+
 // tocHeader represents a header for the table of contents
 type tocHeader struct {
 	level int
@@ -143,14 +285,32 @@ func formatBlockHTML(block *Block, showLineNums bool, singleBlock bool) string {
 			pageType = block.PageTypes[pageNum]
 		}
 
-		if pageType == BlockContentDiff {
+		switch pageType {
+		case BlockContentDiff:
 			sb.WriteString(formatDiffHTML(pageContent))
-		} else {
+		case BlockContentJSON:
+			sb.WriteString(formatCodeBlockHTML(pageContent, "json"))
+		case BlockContentYAML:
+			sb.WriteString(formatCodeBlockHTML(pageContent, "yaml"))
+		default:
 			sb.WriteString(formatMarkdownHTML(pageContent, block, pageNum, showLineNums))
 		}
 	}
 
 	sb.WriteString("</article>\n")
+	return sb.String()
+}
+
+// formatCodeBlockHTML renders content as a single syntax-highlighted code block
+func formatCodeBlockHTML(content string, lang string) string {
+	var sb strings.Builder
+	sb.WriteString("<div class=\"content\">\n")
+	sb.WriteString(fmt.Sprintf("<div class=\"code-block\"><span class=\"code-lang\">%s</span>", html.EscapeString(lang)))
+	sb.WriteString("<button class=\"copy-btn\" onclick=\"copyCode(this)\" title=\"Copy\">&#x2398;</button>")
+	sb.WriteString(fmt.Sprintf("<pre><code class=\"language-%s\">", html.EscapeString(lang)))
+	sb.WriteString(html.EscapeString(content))
+	sb.WriteString("</code></pre></div>\n")
+	sb.WriteString("</div>\n")
 	return sb.String()
 }
 
@@ -1009,6 +1169,358 @@ br { display: block; content: ""; margin: 0.3rem 0; }
 
 /* Highlight in page */
 .search-highlight { background: #DBEAFE; border-radius: 2px; }
+`
+}
+
+// RenderStaticHTMLPage renders blocks as a self-contained HTML document (no CDN, no SSE)
+func RenderStaticHTMLPage(title string, blocks []Block, showLineNums bool) string {
+	var sb strings.Builder
+
+	sb.WriteString("<!DOCTYPE html>\n<html lang=\"en\">\n<head>\n")
+	sb.WriteString("<meta charset=\"UTF-8\">\n")
+	sb.WriteString("<meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\">\n")
+	sb.WriteString(fmt.Sprintf("<title>%s</title>\n", html.EscapeString(title)))
+
+	// Inline highlight.js CSS (no CDN)
+	sb.WriteString("<style>\n")
+	sb.WriteString(highlightCSS)
+	sb.WriteString("\n</style>\n")
+
+	// Inline highlight.js JS (no CDN)
+	sb.WriteString("<script>\n")
+	sb.WriteString(highlightJS)
+	sb.WriteString("\n</script>\n")
+
+	sb.WriteString("<style>\n")
+	sb.WriteString(cssStyles())
+	sb.WriteString("</style>\n")
+	sb.WriteString("</head>\n<body>\n")
+
+	// Collect headers for TOC
+	headers := collectHeaders(blocks)
+
+	// TOC sidebar
+	if len(headers) > 1 {
+		sb.WriteString("<nav id=\"toc\" class=\"toc\">\n")
+		sb.WriteString("<div class=\"toc-toggle\" onclick=\"document.getElementById('toc').classList.toggle('collapsed')\" title=\"Toggle TOC\">&#9776;</div>\n")
+		sb.WriteString("<div class=\"toc-content\">\n")
+		sb.WriteString(fmt.Sprintf("<div class=\"toc-title\">%s</div>\n", html.EscapeString(title)))
+		for _, h := range headers {
+			class := "toc-h1"
+			if h.level == 2 {
+				class = "toc-h2"
+			} else if h.level == 3 {
+				class = "toc-h3"
+			}
+			sb.WriteString(fmt.Sprintf("<a class=\"toc-link %s\" href=\"#%s\" data-target=\"%s\">%s</a>\n",
+				class, h.id, h.id, html.EscapeString(h.text)))
+		}
+		sb.WriteString("</div>\n</nav>\n")
+	}
+
+	// Main content
+	containerClass := "container"
+	if len(headers) > 1 {
+		containerClass = "container has-toc"
+	}
+	sb.WriteString(fmt.Sprintf("<main class=\"%s\">\n", containerClass))
+
+	singleBlock := len(blocks) == 1
+	for i := range blocks {
+		sb.WriteString(formatBlockHTML(&blocks[i], showLineNums, singleBlock))
+	}
+
+	sb.WriteString("</main>\n")
+
+	// Search overlay
+	sb.WriteString(searchOverlayHTML())
+
+	sb.WriteString("<script>\n")
+	sb.WriteString(staticScript())
+	sb.WriteString("</script>\n")
+	sb.WriteString("</body>\n</html>\n")
+
+	return sb.String()
+}
+
+// RenderStaticImageHTML renders an image as a self-contained HTML page with base64 data URI
+func RenderStaticImageHTML(title string, dataURI string) string {
+	var sb strings.Builder
+
+	sb.WriteString("<!DOCTYPE html>\n<html lang=\"en\">\n<head>\n")
+	sb.WriteString("<meta charset=\"UTF-8\">\n")
+	sb.WriteString("<meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\">\n")
+	sb.WriteString(fmt.Sprintf("<title>%s</title>\n", html.EscapeString(title)))
+	sb.WriteString(`<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body {
+  background: #FFFFFF;
+  color: #0A1628;
+  font-family: -apple-system, BlinkMacSystemFont, sans-serif;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  min-height: 100vh;
+  padding: 2rem;
+}
+.title {
+  font-size: 14px;
+  font-weight: 600;
+  color: #64748B;
+  margin-bottom: 1.5rem;
+}
+.img-container { max-width: 90vw; }
+.img-container img {
+  max-width: 100%;
+  max-height: 85vh;
+  border-radius: 6px;
+  border: 1px solid #E2E8F0;
+  cursor: pointer;
+  transition: max-width 0.2s, max-height 0.2s;
+}
+.img-container img.expanded { max-width: none; max-height: none; }
+</style>
+`)
+	sb.WriteString("</head>\n<body>\n")
+	sb.WriteString(fmt.Sprintf("<div class=\"title\">%s</div>\n", html.EscapeString(title)))
+	sb.WriteString("<div class=\"img-container\">\n")
+	sb.WriteString(fmt.Sprintf("  <img src=\"%s\" alt=\"%s\" onclick=\"this.classList.toggle('expanded')\">\n",
+		dataURI, html.EscapeString(title)))
+	sb.WriteString("</div>\n")
+	sb.WriteString("</body>\n</html>\n")
+
+	return sb.String()
+}
+
+// staticScript returns JavaScript for static export (no SSE live reload)
+func staticScript() string {
+	return `
+/* --- Syntax highlighting --- */
+document.querySelectorAll('.code-block pre code').forEach(function(el) {
+  hljs.highlightElement(el);
+});
+
+/* --- Copy button --- */
+function copyCode(btn) {
+  var code = btn.parentElement.querySelector('code');
+  var text = code.textContent || code.innerText;
+  navigator.clipboard.writeText(text).then(function() {
+    btn.classList.add('copied');
+    btn.innerHTML = '&#x2713;';
+    setTimeout(function() {
+      btn.classList.remove('copied');
+      btn.innerHTML = '&#x2398;';
+    }, 1500);
+  });
+}
+
+/* --- Table sorting --- */
+function sortTable(th, colIdx) {
+  var table = th.closest('table');
+  var tbody = table.querySelector('tbody');
+  var rows = Array.from(tbody.querySelectorAll('tr'));
+  var isAsc = th.classList.contains('asc');
+
+  table.querySelectorAll('.sortable-th').forEach(function(h) { h.classList.remove('asc', 'desc'); });
+
+  if (isAsc) {
+    th.classList.add('desc');
+  } else {
+    th.classList.add('asc');
+  }
+
+  rows.sort(function(a, b) {
+    var aText = (a.children[colIdx] || {}).textContent || '';
+    var bText = (b.children[colIdx] || {}).textContent || '';
+    var aNum = parseFloat(aText);
+    var bNum = parseFloat(bText);
+    var cmp;
+    if (!isNaN(aNum) && !isNaN(bNum)) {
+      cmp = aNum - bNum;
+    } else {
+      cmp = aText.localeCompare(bText);
+    }
+    return isAsc ? -cmp : cmp;
+  });
+
+  rows.forEach(function(row) { tbody.appendChild(row); });
+}
+
+/* --- Collapsible diff hunks --- */
+function toggleHunk(id) {
+  var body = document.getElementById(id);
+  if (body) {
+    body.parentElement.classList.toggle('collapsed');
+  }
+}
+
+/* --- Scroll-spy for TOC --- */
+(function() {
+  var links = document.querySelectorAll('.toc-link');
+  if (links.length === 0) return;
+
+  var targets = [];
+  links.forEach(function(link) {
+    var id = link.getAttribute('data-target');
+    var el = document.getElementById(id);
+    if (el) targets.push({ link: link, el: el });
+  });
+
+  function updateSpy() {
+    var scrollY = window.scrollY + 80;
+    var active = null;
+    for (var i = targets.length - 1; i >= 0; i--) {
+      if (targets[i].el.offsetTop <= scrollY) {
+        active = targets[i];
+        break;
+      }
+    }
+    links.forEach(function(l) { l.classList.remove('active'); });
+    if (active) active.link.classList.add('active');
+  }
+
+  window.addEventListener('scroll', updateSpy, { passive: true });
+  updateSpy();
+})();
+
+/* --- Search --- */
+(function() {
+  var overlay = document.getElementById('search-overlay');
+  var input = document.getElementById('search-input');
+  var resultsDiv = document.getElementById('search-results');
+  var countSpan = document.getElementById('search-count');
+  var activeIdx = -1;
+  var results = [];
+
+  var searchItems = [];
+  document.querySelectorAll('.block').forEach(function(block) {
+    var header = block.querySelector('.block-header');
+    var blockName = header ? header.textContent : '';
+    block.querySelectorAll('p, h1, h2, h3, .list-item, .code-block code, td, th').forEach(function(el) {
+      var text = el.textContent || '';
+      if (text.trim()) {
+        searchItems.push({ text: text.trim(), el: el, blockName: blockName });
+      }
+    });
+  });
+
+  function openSearch() {
+    overlay.classList.remove('hidden');
+    input.value = '';
+    input.focus();
+    resultsDiv.innerHTML = '';
+    countSpan.textContent = '';
+    activeIdx = -1;
+    clearHighlights();
+  }
+
+  function closeSearch() {
+    overlay.classList.add('hidden');
+    clearHighlights();
+  }
+
+  function clearHighlights() {
+    document.querySelectorAll('.search-highlight').forEach(function(el) {
+      var parent = el.parentNode;
+      parent.replaceChild(document.createTextNode(el.textContent), el);
+      parent.normalize();
+    });
+  }
+
+  function doSearch(query) {
+    resultsDiv.innerHTML = '';
+    results = [];
+    activeIdx = -1;
+    if (!query || query.length < 2) {
+      countSpan.textContent = '';
+      return;
+    }
+    var lower = query.toLowerCase();
+    searchItems.forEach(function(item) {
+      var idx = item.text.toLowerCase().indexOf(lower);
+      if (idx !== -1) {
+        results.push(item);
+      }
+    });
+
+    countSpan.textContent = results.length + ' match' + (results.length !== 1 ? 'es' : '');
+
+    results.slice(0, 50).forEach(function(item, i) {
+      var div = document.createElement('div');
+      div.className = 'search-result';
+      var text = item.text;
+      var idx = text.toLowerCase().indexOf(lower);
+      var start = Math.max(0, idx - 30);
+      var end = Math.min(text.length, idx + query.length + 30);
+      var snippet = (start > 0 ? '...' : '') + text.substring(start, idx) +
+        '<mark>' + text.substring(idx, idx + query.length) + '</mark>' +
+        text.substring(idx + query.length, end) + (end < text.length ? '...' : '');
+      div.innerHTML = snippet + '<div class="sr-context">' + (item.blockName || '') + '</div>';
+      div.addEventListener('click', function() {
+        navigateTo(i);
+      });
+      resultsDiv.appendChild(div);
+    });
+  }
+
+  function navigateTo(idx) {
+    if (idx < 0 || idx >= results.length) return;
+    activeIdx = idx;
+    var item = results[idx];
+    closeSearch();
+    item.el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    item.el.classList.add('search-highlight');
+    setTimeout(function() { item.el.classList.remove('search-highlight'); }, 3000);
+    resultsDiv.querySelectorAll('.search-result').forEach(function(el, i) {
+      el.classList.toggle('active', i === idx);
+    });
+  }
+
+  if (input) {
+    input.addEventListener('input', function() {
+      doSearch(input.value);
+    });
+    input.addEventListener('keydown', function(e) {
+      if (e.key === 'Escape') {
+        closeSearch();
+      } else if (e.key === 'Enter') {
+        if (results.length > 0) {
+          navigateTo(activeIdx < 0 ? 0 : activeIdx);
+        }
+      } else if (e.key === 'ArrowDown') {
+        e.preventDefault();
+        if (results.length > 0) {
+          activeIdx = (activeIdx + 1) % Math.min(results.length, 50);
+          resultsDiv.querySelectorAll('.search-result').forEach(function(el, i) {
+            el.classList.toggle('active', i === activeIdx);
+            if (i === activeIdx) el.scrollIntoView({ block: 'nearest' });
+          });
+        }
+      } else if (e.key === 'ArrowUp') {
+        e.preventDefault();
+        if (results.length > 0) {
+          activeIdx = activeIdx <= 0 ? Math.min(results.length, 50) - 1 : activeIdx - 1;
+          resultsDiv.querySelectorAll('.search-result').forEach(function(el, i) {
+            el.classList.toggle('active', i === activeIdx);
+            if (i === activeIdx) el.scrollIntoView({ block: 'nearest' });
+          });
+        }
+      }
+    });
+  }
+
+  document.addEventListener('keydown', function(e) {
+    if (e.key === 'Escape' && !overlay.classList.contains('hidden')) {
+      closeSearch();
+      return;
+    }
+    if (overlay.classList.contains('hidden') && (e.key === '/' || (e.ctrlKey && e.key === 'k'))) {
+      if (document.activeElement && (document.activeElement.tagName === 'INPUT' || document.activeElement.tagName === 'TEXTAREA')) return;
+      e.preventDefault();
+      openSearch();
+    }
+  });
+})();
 `
 }
 

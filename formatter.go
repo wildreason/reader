@@ -993,6 +993,64 @@ func processListItems(line string) string {
 	return line
 }
 
+// tviewTagRegex matches tview color/style tags like [#hex], [-], [-:-:-], [color:bg:flags]
+var tviewTagRegex = regexp.MustCompile(`\[([^\[\]]*)\]`)
+
+// stripTviewTags removes tview formatting tags from rendered content.
+// Keeps structural content (indentation, borders, line breaks) intact.
+func stripTviewTags(s string) string {
+	return tviewTagRegex.ReplaceAllStringFunc(s, func(match string) string {
+		inner := match[1 : len(match)-1]
+		// Preserve markdown-style link text that happens to be in brackets
+		// tview tags are: color names, #hex, -, ::flags, color:bg:flags
+		if inner == "" || inner == "-" || inner == "-:-:-" || inner == ":-:-" || inner == "::-" {
+			return ""
+		}
+		if strings.HasPrefix(inner, "#") {
+			return ""
+		}
+		if strings.HasPrefix(inner, "::") {
+			return ""
+		}
+		if strings.Contains(inner, ":-:") || strings.Contains(inner, ":") {
+			// Looks like a tview color:bg:flags tag
+			parts := strings.Split(inner, ":")
+			for _, p := range parts {
+				p = strings.TrimSpace(p)
+				if p == "" || p == "-" || p == "b" || p == "i" || p == "u" || p == "d" {
+					continue
+				}
+				if strings.HasPrefix(p, "#") {
+					continue
+				}
+				// Known tview color names
+				colors := map[string]bool{
+					"white": true, "black": true, "red": true, "green": true,
+					"blue": true, "yellow": true, "cyan": true, "gray": true,
+					"grey": true, "orange": true, "purple": true, "pink": true,
+				}
+				if colors[strings.ToLower(p)] {
+					continue
+				}
+				// Not a recognized tview tag -- keep it
+				return match
+			}
+			return ""
+		}
+		// Single word: could be a color name
+		colors := map[string]bool{
+			"white": true, "black": true, "red": true, "green": true,
+			"blue": true, "yellow": true, "cyan": true, "gray": true,
+			"grey": true, "orange": true, "purple": true, "pink": true,
+		}
+		if colors[strings.ToLower(inner)] {
+			return ""
+		}
+		// Not a tview tag, keep the brackets
+		return match
+	})
+}
+
 // FormatBlockList renders a list of available blocks
 func FormatBlockList(names []string) string {
 	if len(names) == 0 {

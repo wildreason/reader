@@ -13,6 +13,8 @@ aster pick                 # Pick from recent files
 aster latest               # Open newest file in cwd
 aster -n file.md           # Show source file line numbers
 aster file.md --port 3000  # Web: serve rendered HTML on localhost
+aster ~/dropstore/docs/              # Terminal: list docs with title/date/tags
+aster ~/dropstore/docs/ --port 8080  # Web: directory index with per-doc routes
 ```
 
 Shell alias: `alias as=aster`
@@ -54,6 +56,16 @@ parser.Parse()       Extract blocks from content
 - Single block rendering: markdown files render as one continuous document (headings stay as native h1/h2/h3)
 - SSE live reload: file watcher polls every 500ms, pushes reload event to all connected browsers
 - No external dependencies at runtime (highlight.js + fonts loaded from CDN)
+- Frontmatter: `---` delimited YAML stripped from content, `title` used in `<title>` tag
+
+### Directory mode (`aster <dir> --port`)
+
+- Scans `*.md` files, parses frontmatter from each
+- Index page at `/` lists all docs sorted by created date desc
+- Individual docs served at `/{slug}` (slug = filename without .md)
+- `docCache` holds pre-rendered HTML per slug, updated by directory watcher
+- SSE live reload: detects new/modified/deleted files, refreshes index + docs
+- Terminal fallback: `aster <dir>` prints formatted table to stdout
 
 ### Web features
 
@@ -90,9 +102,11 @@ parser.Parse()       Extract blocks from content
 | `follower.go` | Follow mode (-f), file watching |
 | `formatter.go` | TUI block rendering, markdown, tables, line number gutter |
 | `formatter_diff.go` | TUI diff coloring (ANSI) |
-| `formatter_html.go` | Web rendering: HTML/CSS/JS, brand theme, all web features |
+| `formatter_html.go` | Web rendering: HTML/CSS/JS, brand theme, all web features, index page |
 | `formatter_shell.go` | Shell output styling |
-| `server.go` | HTTP server, SSE broadcaster, file watcher, live reload |
+| `frontmatter.go` | YAML frontmatter parser (title, created, tags) |
+| `frontmatter_test.go` | Frontmatter parsing tests |
+| `server.go` | HTTP server, SSE broadcaster, file/dir watcher, live reload |
 | `content_type.go` | Content type detection |
 | `commands.go` | Navigator, command parsing |
 | `recent.go` | Recent file history (pick/latest) |
@@ -103,6 +117,8 @@ parser.Parse()       Extract blocks from content
 
 ```
 aster <file>        View file (auto-detect format)
+aster <dir>         List directory docs (table to stdout)
+aster <dir> --port  Serve directory as web index with doc routes
 aster pick | p      Pick from recent files
 aster latest | l    Open newest file in cwd
 aster help          Show help
@@ -154,9 +170,68 @@ git push origin v1.0.1
 # GitHub Actions runs goreleaser -> GitHub Release + Homebrew tap
 ```
 
+## Frontmatter
+
+Files with YAML frontmatter between `---` delimiters are parsed automatically:
+
+```yaml
+---
+title: Document Title
+created: 2026-02-23
+tags: [feature, docs]
+---
+```
+
+- `ParseFrontmatter(content) -> (Frontmatter, body)` in `frontmatter.go`
+- Web mode: title used in `<title>` tag, frontmatter stripped from rendered content
+- TUI mode: frontmatter shows as-is (not stripped)
+- Directory mode: title/created/tags populate the index listing
+
+## v2: wedoc
+
+v1 is a terminal file viewer. v2 extends `--port` into a shareable web renderer. Same binary, no new project.
+
+Render any content as a clean web page, instantly, from the terminal. Readable and shareable.
+
+```bash
+aster file.md --port 3000          # Serve rendered HTML (v1, done)
+aster file.md --html > page.html   # Static export, self-contained
+aster file.md --share              # Public URL via tunnel, expires on exit
+aster file.md --deploy             # Push to hosting, permanent URL
+```
+
+### Phases
+
+| Phase | Feature | Ship criteria |
+|-------|---------|---------------|
+| 1 | Content parity | JSON/YAML syntax highlighting in web, images via `<img>`. Every TUI content type works in `--port`. |
+| 2 | Static export (`--html`) | `aster file.md --html > page.html` outputs self-contained HTML with inlined CSS/JS. Works offline, renders identically to `--port`. |
+| 3 | Public sharing (`--share`) | `aster file.md --share` creates public URL via tunnel (cloudflare/bore). Auto-expires on exit. Zero config. |
+| 4 | Deploy (`--deploy`) | `aster file.md --deploy` pushes static HTML to hosting (Vercel/CF Pages). Returns permanent URL. |
+
+### Web rendering status
+
+| Content | Web | Gap |
+|---------|-----|-----|
+| Markdown | Full (TOC, search, tables, syntax highlighting, diffs) | None |
+| Diffs | Full (side-by-side, word-level, collapsible) | None |
+| JSONL | Functional | None |
+| Plain text | Functional | None |
+| JSON | Escaped plain text | Need syntax highlighting via highlight.js |
+| YAML | Escaped plain text | Need syntax highlighting via highlight.js |
+| Images | Terminal only | Need `<img>` in web mode |
+
+### What carries forward
+
+Everything from v1: TUI viewer, `formatter_html.go` renderer, SSE + file watcher, directory mode, frontmatter parser, stdin piping.
+
+### What dies
+
+SuperDoc integration, .docx editing, CRUD API, collaboration, dashboard shell, `asdoc` clipboard tool.
+
 ## Testing
 
 ```bash
 make test
-go test -v ./tests/...
+go test -v ./...
 ```
