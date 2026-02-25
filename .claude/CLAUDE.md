@@ -8,11 +8,14 @@
 aster file.md              # Terminal: Markdown with colors and tables
 aster photo.png            # Terminal: Image inline (chafa)
 aster changes.diff         # Terminal: Diff with syntax highlighting
+aster data.csv             # Terminal: CSV as formatted table
 aster data.jsonl           # Terminal: JSONL transcript viewer
 aster pick                 # Pick from recent files
 aster latest               # Open newest file in cwd
 aster -n file.md           # Show source file line numbers
 aster file.md --port 3000  # Web: serve rendered HTML on localhost
+aster data.csv --port 3000 # Web: sortable/filterable table with auto-chart
+aster file.md --html       # Static: self-contained HTML to stdout
 aster ~/dropstore/docs/              # Terminal: list docs with title/date/tags
 aster ~/dropstore/docs/ --port 8080  # Web: directory index with per-doc routes
 ```
@@ -31,7 +34,9 @@ make install   # Install to ~/.local/bin
 
 - `-n` — Source file line numbers in gutter (dim gray, right-aligned)
 - `-f` — Follow mode (file watching)
+- `-t TYPE` — Force content type (md, json, jsonl, diff, txt, yaml, csv)
 - `--port N` — Serve rendered file as HTML on localhost:N with live reload
+- `--html` — Export self-contained HTML to stdout (no CDN, no server)
 
 ## Architecture
 
@@ -42,13 +47,15 @@ main.go              Args, subcommands, routing, flag parsing
      |
 detectFileType()     Route by extension: img -> viewImage, text -> parser
      |
-detectParser()       Auto-detect: .md .jsonl .diff .txt .json
+detectParser()       Auto-detect: .md .jsonl .diff .txt .json .csv
      |
 parser.Parse()       Extract blocks from content
      |
      +-- TUI path:   reader.go -> formatter.go (tview tags, Catppuccin dark)
      |
      +-- Web path:   server.go -> formatter_html.go (HTML/CSS/JS, brand light theme)
+     |
+     +-- Static:     formatter_html.go -> RenderStaticHTMLPage (inlined CSS/JS, no CDN)
 ```
 
 ### Web mode (`--port`)
@@ -79,6 +86,8 @@ parser.Parse()       Extract blocks from content
 | TOC sidebar | Fixed left nav from h1/h2/h3, scroll-spy, collapsible |
 | Diffs | Side-by-side two-column, collapsible hunks, word-level LCS highlighting |
 | Search | `/` or `Ctrl+K` opens fuzzy search overlay with arrow key navigation |
+| CSV tables | Per-column filter inputs, row count, numeric right-alignment |
+| Auto-chart | SVG line chart when CSV has label + numeric columns (brand colors) |
 
 ### Brand theme
 
@@ -97,6 +106,7 @@ parser.Parse()       Extract blocks from content
 | `parser_jsonl.go` | JSONLParser (transcripts) |
 | `parser_diff.go` | DiffParser (unified diffs) |
 | `parser_txt.go` | TxtParser (plain text) |
+| `parser_csv.go` | CsvParser (CSV/TSV with auto-delimiter detection) |
 | `parser_todo.go` | TodoParser (JSON todos) |
 | `reader.go` | Scrollable TUI viewer |
 | `follower.go` | Follow mode (-f), file watching |
@@ -112,6 +122,8 @@ parser.Parse()       Extract blocks from content
 | `recent.go` | Recent file history (pick/latest) |
 | `context_git.go` | Git context for diffs |
 | `keybindings.go` | Key action parsing |
+| `embed.go` | go:embed declarations for highlight.js assets |
+| `embed/` | highlight.min.js + github.min.css for static HTML export |
 
 ## Commands
 
@@ -131,6 +143,7 @@ aster img <file|-|+>    Images
 aster txt <file|-|+>    Plain text
 aster diff <file|-|+>   Diffs
 aster json <file|-|+>   JSON
+aster csv <file|-|+>    CSV/TSV
 aster jsonl <file|-|+>  Transcripts
 ```
 
@@ -202,12 +215,12 @@ aster file.md --deploy             # Push to hosting, permanent URL
 
 ### Phases
 
-| Phase | Feature | Ship criteria |
-|-------|---------|---------------|
-| 1 | Content parity | JSON/YAML syntax highlighting in web, images via `<img>`. Every TUI content type works in `--port`. |
-| 2 | Static export (`--html`) | `aster file.md --html > page.html` outputs self-contained HTML with inlined CSS/JS. Works offline, renders identically to `--port`. |
-| 3 | Public sharing (`--share`) | `aster file.md --share` creates public URL via tunnel (cloudflare/bore). Auto-expires on exit. Zero config. |
-| 4 | Deploy (`--deploy`) | `aster file.md --deploy` pushes static HTML to hosting (Vercel/CF Pages). Returns permanent URL. |
+| Phase | Feature | Status |
+|-------|---------|--------|
+| 1 | Content parity | Done. JSON/YAML syntax highlighting, images, CSV/TSV tables with auto-chart. |
+| 2 | Static export (`--html`) | Done. Self-contained HTML with inlined highlight.js CSS/JS. Works offline. |
+| 3 | Public sharing (`--share`) | Planned. Public URL via tunnel (cloudflare/bore). Auto-expires on exit. |
+| 4 | Deploy (`--deploy`) | Planned. Push static HTML to hosting (Vercel/CF Pages). Permanent URL. |
 
 ### Web rendering status
 
@@ -215,11 +228,12 @@ aster file.md --deploy             # Push to hosting, permanent URL
 |---------|-----|-----|
 | Markdown | Full (TOC, search, tables, syntax highlighting, diffs) | None |
 | Diffs | Full (side-by-side, word-level, collapsible) | None |
+| CSV/TSV | Full (sortable, filterable, auto-chart) | None |
 | JSONL | Functional | None |
 | Plain text | Functional | None |
-| JSON | Escaped plain text | Need syntax highlighting via highlight.js |
-| YAML | Escaped plain text | Need syntax highlighting via highlight.js |
-| Images | Terminal only | Need `<img>` in web mode |
+| JSON | Syntax highlighted via highlight.js | None |
+| YAML | Syntax highlighted via highlight.js | None |
+| Images | Web `<img>` + base64 data URI in --html | None |
 
 ### What carries forward
 
