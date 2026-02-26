@@ -20,3 +20,5 @@ guide/*
 debug.log
 .env
 docs/
+.lap
+laps/

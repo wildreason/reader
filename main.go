@@ -443,8 +443,14 @@ func listDirectory(dirPath string) {
 	}
 }
 
+const maxFileSize = 100 * 1024 * 1024 // 100MB
+
 // viewTextFile reads a file and renders it in the TUI
 func viewTextFile(filePath string, forceType string, follow bool) {
+	if stat, err := os.Stat(filePath); err == nil && stat.Size() > maxFileSize {
+		fmt.Fprintf(os.Stderr, "Error: file too large (%d bytes, max %d)\n", stat.Size(), maxFileSize)
+		os.Exit(1)
+	}
 	content, err := os.ReadFile(filePath)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Error: Could not read file '%s': %v\n", filePath, err)

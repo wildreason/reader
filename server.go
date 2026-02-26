@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"html"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -10,6 +11,11 @@ import (
 	"sync"
 	"time"
 )
+
+// formatServerAddr returns the listen address for localhost binding
+func formatServerAddr(port int) string {
+	return fmt.Sprintf("127.0.0.1:%d", port)
+}
 
 // sseClient represents a connected SSE client
 type sseClient struct {
@@ -162,7 +168,7 @@ func serveVideoHTML(filePath string, port int) {
 		fmt.Fprint(w, videoPlayerHTML(title, "/video", mime))
 	})
 
-	addr := fmt.Sprintf(":%d", port)
+	addr := formatServerAddr(port)
 	fmt.Fprintf(os.Stderr, "Serving %s at http://localhost:%d\n", filePath, port)
 
 	if err := http.ListenAndServe(addr, mux); err != nil {
@@ -173,6 +179,9 @@ func serveVideoHTML(filePath string, port int) {
 
 // videoPlayerHTML returns a branded HTML page with a video player
 func videoPlayerHTML(title, src, mime string) string {
+	title = html.EscapeString(title)
+	src = html.EscapeString(src)
+	mime = html.EscapeString(mime)
 	return fmt.Sprintf(`<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -446,10 +455,10 @@ es.onmessage = function(e) { if (e.data === 'reload') { document.querySelector('
 es.onerror = function() { setTimeout(function() { location.reload(); }, 2000); };
 </script>
 </body>
-</html>`, title, title, title)
+</html>`, html.EscapeString(title), html.EscapeString(title), html.EscapeString(title))
 	})
 
-	addr := fmt.Sprintf(":%d", port)
+	addr := formatServerAddr(port)
 	fmt.Fprintf(os.Stderr, "Serving %s at http://localhost:%d\n", filePath, port)
 
 	if err := http.ListenAndServe(addr, mux); err != nil {
@@ -493,8 +502,10 @@ func serveHTML(filePath string, blocks []Block, port int) {
 		go watchAndRerender(filePath, title, singleBlock, ct, &mu, &currentHTML, broadcaster, stopCh)
 	}
 
+	mux := http.NewServeMux()
+
 	// GET / -- serve rendered HTML
-	http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
+	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/" {
 			http.NotFound(w, r)
 			return
@@ -508,7 +519,7 @@ func serveHTML(filePath string, blocks []Block, port int) {
 	})
 
 	// GET /events -- SSE endpoint
-	http.HandleFunc("/events", func(w http.ResponseWriter, r *http.Request) {
+	mux.HandleFunc("/events", func(w http.ResponseWriter, r *http.Request) {
 		flusher, ok := w.(http.Flusher)
 		if !ok {
 			http.Error(w, "streaming not supported", http.StatusInternalServerError)
@@ -534,10 +545,10 @@ func serveHTML(filePath string, blocks []Block, port int) {
 		}
 	})
 
-	addr := fmt.Sprintf(":%d", port)
+	addr := formatServerAddr(port)
 	fmt.Fprintf(os.Stderr, "Serving %s at http://localhost:%d\n", filePath, port)
 
-	if err := http.ListenAndServe(addr, nil); err != nil {
+	if err := http.ListenAndServe(addr, mux); err != nil {
 		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
 		os.Exit(1)
 	}
@@ -617,7 +628,7 @@ func serveDirectory(dirPath string, port int) {
 	// Directory watcher
 	go watchDirectory(dirPath, dirName, &mu, cache, &indexHTML, broadcaster)
 
-	addr := fmt.Sprintf(":%d", port)
+	addr := formatServerAddr(port)
 	fmt.Fprintf(os.Stderr, "Serving %s at http://localhost:%d\n", dirPath, port)
 
 	if err := http.ListenAndServe(addr, mux); err != nil {

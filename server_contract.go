@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"html"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -23,7 +24,7 @@ func serveContractHTML(filePath string, port int) {
 	buildPage := func() string {
 		content, err := os.ReadFile(absPath)
 		if err != nil {
-			return fmt.Sprintf("<pre>Error reading file: %s</pre>", err.Error())
+			return fmt.Sprintf("<pre>Error reading file: %s</pre>", html.EscapeString(err.Error()))
 		}
 		fm, body := ParseFrontmatter(string(content))
 		title := filepath.Base(filePath)
@@ -96,7 +97,7 @@ func serveContractHTML(filePath string, port int) {
 		fmt.Fprint(w, page)
 	})
 
-	addr := fmt.Sprintf(":%d", port)
+	addr := formatServerAddr(port)
 	fmt.Fprintf(os.Stderr, "Serving %s at http://localhost:%d\n", filePath, port)
 
 	if err := http.ListenAndServe(addr, mux); err != nil {

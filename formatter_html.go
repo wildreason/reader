@@ -767,6 +767,15 @@ func formatMarkdownHTML(text string, block *Block, pageNum int, showLineNums boo
 	return sb.String()
 }
 
+// sanitizeURL strips dangerous URL schemes (javascript:, data:, vbscript:)
+func sanitizeURL(u string) string {
+	lower := strings.ToLower(strings.TrimSpace(u))
+	if strings.HasPrefix(lower, "javascript:") || strings.HasPrefix(lower, "data:") || strings.HasPrefix(lower, "vbscript:") {
+		return "#"
+	}
+	return u
+}
+
 // processInlineHTML handles inline markdown: bold, italic, code, links, images
 func processInlineHTML(text string) string {
 	escaped := html.EscapeString(text)
@@ -777,7 +786,13 @@ func processInlineHTML(text string) string {
 
 	// Inline images: ![alt](url)
 	imgRe := regexp.MustCompile(`!\[([^\]]*)\]\(([^)]+)\)`)
-	escaped = imgRe.ReplaceAllString(escaped, `<img class="inline-img" src="$2" alt="$1" loading="lazy">`)
+	escaped = imgRe.ReplaceAllStringFunc(escaped, func(m string) string {
+		parts := imgRe.FindStringSubmatch(m)
+		if len(parts) < 3 {
+			return m
+		}
+		return fmt.Sprintf(`<img class="inline-img" src="%s" alt="%s" loading="lazy">`, sanitizeURL(parts[2]), parts[1])
+	})
 
 	// Bold: **text**
 	boldRe := regexp.MustCompile(`\*\*([^*]+)\*\*`)
@@ -793,7 +808,14 @@ func processInlineHTML(text string) string {
 
 	// Links: [text](url) -- open in new tab with external icon
 	linkRe := regexp.MustCompile(`\[([^\]]+)\]\(([^)]+)\)`)
-	escaped = linkRe.ReplaceAllString(escaped, `<a href="$2" target="_blank" rel="noopener" title="$2">$1<span class="ext-icon">&#x2197;</span></a>`)
+	escaped = linkRe.ReplaceAllStringFunc(escaped, func(m string) string {
+		parts := linkRe.FindStringSubmatch(m)
+		if len(parts) < 3 {
+			return m
+		}
+		href := sanitizeURL(parts[2])
+		return fmt.Sprintf(`<a href="%s" target="_blank" rel="noopener" title="%s">%s<span class="ext-icon">&#x2197;</span></a>`, href, href, parts[1])
+	})
 
 	return escaped
 }
@@ -1898,10 +1920,11 @@ function toggleHunk(id) {
       var idx = text.toLowerCase().indexOf(lower);
       var start = Math.max(0, idx - 30);
       var end = Math.min(text.length, idx + query.length + 30);
-      var snippet = (start > 0 ? '...' : '') + text.substring(start, idx) +
-        '<mark>' + text.substring(idx, idx + query.length) + '</mark>' +
-        text.substring(idx + query.length, end) + (end < text.length ? '...' : '');
-      div.innerHTML = snippet + '<div class="sr-context">' + (item.blockName || '') + '</div>';
+      var escH = function(s) { var d = document.createElement('div'); d.appendChild(document.createTextNode(s)); return d.innerHTML; };
+      var snippet = (start > 0 ? '...' : '') + escH(text.substring(start, idx)) +
+        '<mark>' + escH(text.substring(idx, idx + query.length)) + '</mark>' +
+        escH(text.substring(idx + query.length, end)) + (end < text.length ? '...' : '');
+      div.innerHTML = snippet + '<div class="sr-context">' + escH(item.blockName || '') + '</div>';
       div.addEventListener('click', function() {
         navigateTo(i);
       });
@@ -2181,10 +2204,11 @@ function toggleHunk(id) {
       var idx = text.toLowerCase().indexOf(lower);
       var start = Math.max(0, idx - 30);
       var end = Math.min(text.length, idx + query.length + 30);
-      var snippet = (start > 0 ? '...' : '') + text.substring(start, idx) +
-        '<mark>' + text.substring(idx, idx + query.length) + '</mark>' +
-        text.substring(idx + query.length, end) + (end < text.length ? '...' : '');
-      div.innerHTML = snippet + '<div class="sr-context">' + (item.blockName || '') + '</div>';
+      var escH = function(s) { var d = document.createElement('div'); d.appendChild(document.createTextNode(s)); return d.innerHTML; };
+      var snippet = (start > 0 ? '...' : '') + escH(text.substring(start, idx)) +
+        '<mark>' + escH(text.substring(idx, idx + query.length)) + '</mark>' +
+        escH(text.substring(idx + query.length, end)) + (end < text.length ? '...' : '');
+      div.innerHTML = snippet + '<div class="sr-context">' + escH(item.blockName || '') + '</div>';
       div.addEventListener('click', function() {
         navigateTo(i);
       });
