@@ -10,6 +10,9 @@ aster photo.png            # Terminal: Image inline (chafa)
 aster changes.diff         # Terminal: Diff with syntax highlighting
 aster data.csv             # Terminal: CSV as formatted table
 aster data.jsonl           # Terminal: JSONL transcript viewer
+aster demo.mp4             # Terminal: Video metadata (ffprobe)
+aster demo.webm --port 3000 # Web: branded video player with controls
+aster demo.mp4 --html      # Static: self-contained HTML video page
 aster pick                 # Pick from recent files
 aster latest               # Open newest file in cwd
 aster -n file.md           # Show source file line numbers
@@ -45,7 +48,7 @@ Two rendering pipelines from the same parse layer:
 ```
 main.go              Args, subcommands, routing, flag parsing
      |
-detectFileType()     Route by extension: img -> viewImage, text -> parser
+detectFileType()     Route by extension: img -> viewImage, vid -> viewVideo, text -> parser
      |
 detectParser()       Auto-detect: .md .jsonl .diff .txt .json .csv
      |
@@ -88,6 +91,7 @@ parser.Parse()       Extract blocks from content
 | Search | `/` or `Ctrl+K` opens fuzzy search overlay with arrow key navigation |
 | CSV tables | Per-column filter inputs, row count, numeric right-alignment |
 | Auto-chart | SVG line chart when CSV has label + numeric columns (brand colors) |
+| Video player | `<video controls>`, speed buttons (0.5x/1x/1.5x/2x), keyboard shortcuts (Space/F/arrows) |
 
 ### Brand theme
 
@@ -102,6 +106,7 @@ parser.Parse()       Extract blocks from content
 |------|---------|
 | `main.go` | Entry, subcommand routing, auto-detect, flag parsing |
 | `viewer_img.go` | Image rendering (chafa/imgcat, iterm/kitty/symbols) |
+| `viewer_video.go` | Video rendering (ffprobe metadata, ffplay playback, web player) |
 | `parser.go` | MarkdownParser, Block struct, BlockIndex |
 | `parser_jsonl.go` | JSONLParser (transcripts) |
 | `parser_diff.go` | DiffParser (unified diffs) |
@@ -145,6 +150,7 @@ aster diff <file|-|+>   Diffs
 aster json <file|-|+>   JSON
 aster csv <file|-|+>    CSV/TSV
 aster jsonl <file|-|+>  Transcripts
+aster vid <file|-|+>    Video
 ```
 
 ## Navigation (TUI)
@@ -234,6 +240,7 @@ aster file.md --deploy             # Push to hosting, permanent URL
 | JSON | Syntax highlighted via highlight.js | None |
 | YAML | Syntax highlighted via highlight.js | None |
 | Images | Web `<img>` + base64 data URI in --html | None |
+| Video | Web `<video>` player with speed/keyboard controls, base64 in --html (<10MB) | None |
 
 ### What carries forward
 
