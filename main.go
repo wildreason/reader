@@ -48,7 +48,6 @@ var fileTypes = map[string]fileType{
 	"diff":  {name: "diff", extensions: []string{".diff", ".patch"}},
 	"jsonl": {name: "jsonl", extensions: []string{".jsonl"}},
 	"csv":   {name: "csv", extensions: []string{".csv", ".tsv"}},
-	"lit":   {name: "literate", extensions: []string{".lit"}},
 }
 
 func detectTerminalWidth() int {
@@ -109,7 +108,6 @@ func detectFileType(filePath string) string {
 // detectParser selects the appropriate parser based on file extension
 func detectParser(filePath string) Parser {
 	parsers := []Parser{
-		&LitParser{},
 		&TodoParser{},
 		&DiffParser{},
 		&CsvParser{},
@@ -311,12 +309,6 @@ func viewFile(filePath string) {
 		} else {
 			listDirectory(filePath)
 		}
-		return
-	}
-
-	if detectFileType(filePath) == "lit" && servePort > 0 {
-		AddRecent(filePath)
-		serveLit(filePath, servePort)
 		return
 	}
 
