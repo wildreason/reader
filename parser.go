@@ -31,6 +31,7 @@ type Block struct {
 	PageTypes   []BlockContentType // Per-page content type (for mixed content blocks)
 	PageMeta      []string           // Per-page metadata (e.g., filename for diff pages)
 	SourceType    SourceType         // Track which parser created this block
+	TurnParts     []TurnPart         // Structured conversation parts for web rendering
 	PageStartLine []int             // 1-indexed file line number for first content line of each page
 	CsvRecords    [][]string        // Raw CSV records (header + data rows) for structured rendering
 }

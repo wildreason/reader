@@ -2,25 +2,27 @@
 
 ## Project Overview
 
-**aster** - read any file in the terminal, rendered. Single binary. Two output targets: terminal TUI and web browser.
+Lap project: wildreason/aster
+
+**aster** - render any file as a clean web page, instantly, from the terminal. Single binary. Any content format → readable, shareable web. Started as a terminal viewer; the web renderer is the actual product.
 
 ```bash
+aster file.md --port 3000  # Web: serve rendered HTML on localhost
+aster data.csv --port 3000 # Web: sortable/filterable table with auto-chart
+aster demo.webm --port 3000 # Web: branded video player with controls
+aster file.md --html       # Static: self-contained HTML to stdout
+aster demo.mp4 --html      # Static: self-contained HTML video page
+aster ~/dropstore/docs/ --port 8080  # Web: directory index with per-doc routes
 aster file.md              # Terminal: Markdown with colors and tables
 aster photo.png            # Terminal: Image inline (chafa)
 aster changes.diff         # Terminal: Diff with syntax highlighting
 aster data.csv             # Terminal: CSV as formatted table
 aster data.jsonl           # Terminal: JSONL transcript viewer
 aster demo.mp4             # Terminal: Video metadata (ffprobe)
-aster demo.webm --port 3000 # Web: branded video player with controls
-aster demo.mp4 --html      # Static: self-contained HTML video page
 aster pick                 # Pick from recent files
 aster latest               # Open newest file in cwd
 aster -n file.md           # Show source file line numbers
-aster file.md --port 3000  # Web: serve rendered HTML on localhost
-aster data.csv --port 3000 # Web: sortable/filterable table with auto-chart
-aster file.md --html       # Static: self-contained HTML to stdout
 aster ~/dropstore/docs/              # Terminal: list docs with title/date/tags
-aster ~/dropstore/docs/ --port 8080  # Web: directory index with per-doc routes
 ```
 
 Shell alias: `alias as=aster`
@@ -208,9 +210,7 @@ tags: [feature, docs]
 
 ## v2: wedoc
 
-v1 is a terminal file viewer. v2 extends `--port` into a shareable web renderer. Same binary, no new project.
-
-Render any content as a clean web page, instantly, from the terminal. Readable and shareable.
+v1 was the terminal file viewer. v2 is the core product: render any content as a clean web page, instantly, from the terminal. Same binary, no new project.
 
 ```bash
 aster file.md --port 3000          # Serve rendered HTML (v1, done)

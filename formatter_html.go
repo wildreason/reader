@@ -32,48 +32,71 @@ func RenderHTMLPage(title string, blocks []Block, showLineNums bool) string {
 	sb.WriteString("</style>\n")
 	sb.WriteString("</head>\n<body>\n")
 
-	// Collect headers for TOC
-	headers := collectHeaders(blocks)
+	transcript := isTranscriptContent(blocks)
 
-	// TOC sidebar
-	if len(headers) > 1 {
-		sb.WriteString("<nav id=\"toc\" class=\"toc\">\n")
-		sb.WriteString("<div class=\"toc-toggle\" onclick=\"document.getElementById('toc').classList.toggle('collapsed')\" title=\"Toggle TOC\">&#9776;</div>\n")
-		sb.WriteString("<div class=\"toc-content\">\n")
-		sb.WriteString(fmt.Sprintf("<div class=\"toc-title\">%s</div>\n", html.EscapeString(title)))
-		for _, h := range headers {
-			class := "toc-h1"
-			if h.level == 2 {
-				class = "toc-h2"
-			} else if h.level == 3 {
-				class = "toc-h3"
-			}
-			sb.WriteString(fmt.Sprintf("<a class=\"toc-link %s\" href=\"#%s\" data-target=\"%s\">%s</a>\n",
-				class, h.id, h.id, html.EscapeString(h.text)))
+	if transcript {
+		// Transcript mode: no TOC, sticky header, centered container
+		sb.WriteString("<main class=\"transcript\">\n")
+		sb.WriteString("<div class=\"transcript-header\">\n")
+		sb.WriteString(fmt.Sprintf("<div class=\"transcript-title\">%s</div>\n", html.EscapeString(title)))
+		sb.WriteString(fmt.Sprintf("<div class=\"transcript-meta\">%d turns</div>\n", len(blocks)))
+		sb.WriteString("</div>\n")
+
+		for i := range blocks {
+			sb.WriteString(formatBlockHTML(&blocks[i], showLineNums, false))
 		}
-		sb.WriteString("</div>\n</nav>\n")
+
+		sb.WriteString("</main>\n")
+
+		sb.WriteString("<script>\n")
+		sb.WriteString(enhancedScript())
+		sb.WriteString("\nwindow.scrollTo(0, document.body.scrollHeight);\n")
+		sb.WriteString("</script>\n")
+	} else {
+		// Standard mode: TOC, search, normal container
+		headers := collectHeaders(blocks)
+
+		// TOC sidebar
+		if len(headers) > 1 {
+			sb.WriteString("<nav id=\"toc\" class=\"toc\">\n")
+			sb.WriteString("<div class=\"toc-toggle\" onclick=\"document.getElementById('toc').classList.toggle('collapsed')\" title=\"Toggle TOC\">&#9776;</div>\n")
+			sb.WriteString("<div class=\"toc-content\">\n")
+			sb.WriteString(fmt.Sprintf("<div class=\"toc-title\">%s</div>\n", html.EscapeString(title)))
+			for _, h := range headers {
+				class := "toc-h1"
+				if h.level == 2 {
+					class = "toc-h2"
+				} else if h.level == 3 {
+					class = "toc-h3"
+				}
+				sb.WriteString(fmt.Sprintf("<a class=\"toc-link %s\" href=\"#%s\" data-target=\"%s\">%s</a>\n",
+					class, h.id, h.id, html.EscapeString(h.text)))
+			}
+			sb.WriteString("</div>\n</nav>\n")
+		}
+
+		// Main content
+		containerClass := "container"
+		if len(headers) > 1 {
+			containerClass = "container has-toc"
+		}
+		sb.WriteString(fmt.Sprintf("<main class=\"%s\">\n", containerClass))
+
+		singleBlock := len(blocks) == 1
+		for i := range blocks {
+			sb.WriteString(formatBlockHTML(&blocks[i], showLineNums, singleBlock))
+		}
+
+		sb.WriteString("</main>\n")
+
+		// Search overlay
+		sb.WriteString(searchOverlayHTML())
+
+		sb.WriteString("<script>\n")
+		sb.WriteString(enhancedScript())
+		sb.WriteString("</script>\n")
 	}
 
-	// Main content
-	containerClass := "container"
-	if len(headers) > 1 {
-		containerClass = "container has-toc"
-	}
-	sb.WriteString(fmt.Sprintf("<main class=\"%s\">\n", containerClass))
-
-	singleBlock := len(blocks) == 1
-	for i := range blocks {
-		sb.WriteString(formatBlockHTML(&blocks[i], showLineNums, singleBlock))
-	}
-
-	sb.WriteString("</main>\n")
-
-	// Search overlay
-	sb.WriteString(searchOverlayHTML())
-
-	sb.WriteString("<script>\n")
-	sb.WriteString(enhancedScript())
-	sb.WriteString("</script>\n")
 	sb.WriteString("</body>\n</html>\n")
 
 	return sb.String()
@@ -263,9 +286,79 @@ func headerID(text string) string {
 	return text
 }
 
+// isTranscriptContent checks if any block has SourceType == SourceChat
+func isTranscriptContent(blocks []Block) bool {
+	for _, b := range blocks {
+		if b.SourceType == SourceChat {
+			return true
+		}
+	}
+	return false
+}
+
+// formatTranscriptBlockHTML renders a single conversation turn as HTML
+func formatTranscriptBlockHTML(block *Block) string {
+	var sb strings.Builder
+
+	// Extract turn number from block name (e.g., "Turn 3" -> "3")
+	turnLabel := block.Name
+	if turnLabel == "" {
+		turnLabel = "Turn"
+	}
+
+	sb.WriteString("<div class=\"turn\">\n")
+	sb.WriteString(fmt.Sprintf("<div class=\"turn-gutter\">%s</div>\n", html.EscapeString(turnLabel)))
+
+	for _, part := range block.TurnParts {
+		switch part.Type {
+		case "user":
+			sb.WriteString("<div class=\"turn-user\"><pre>")
+			sb.WriteString(html.EscapeString(part.Content))
+			sb.WriteString("</pre></div>\n")
+
+		case "assistant":
+			sb.WriteString("<div class=\"turn-assistant\">")
+			sb.WriteString(formatMarkdownHTML(part.Content, block, 0, false))
+			sb.WriteString("</div>\n")
+
+		case "diff":
+			sb.WriteString("<div class=\"turn-diff\">")
+			if part.Meta != "" {
+				sb.WriteString(fmt.Sprintf("<div class=\"turn-diff-header\">%s</div>", html.EscapeString(part.Meta)))
+			}
+			sb.WriteString(formatDiffHTML(part.Content))
+			sb.WriteString("</div>\n")
+
+		case "tool_result":
+			sb.WriteString("<details class=\"turn-tool\"><summary>Tool Output</summary><pre>")
+			sb.WriteString(html.EscapeString(part.Content))
+			sb.WriteString("</pre></details>\n")
+
+		case "question":
+			sb.WriteString("<div class=\"turn-question\"><pre>")
+			sb.WriteString(html.EscapeString(part.Content))
+			sb.WriteString("</pre></div>\n")
+
+		default:
+			// Unknown part type: render as plain preformatted text
+			sb.WriteString("<div class=\"turn-assistant\"><pre>")
+			sb.WriteString(html.EscapeString(part.Content))
+			sb.WriteString("</pre></div>\n")
+		}
+	}
+
+	sb.WriteString("</div>\n")
+	return sb.String()
+}
+
 // formatBlockHTML renders a single block with all pages concatenated
 // When singleBlock is true, the block header bar is hidden (headings are in the content)
 func formatBlockHTML(block *Block, showLineNums bool, singleBlock bool) string {
+	// Transcript blocks use dedicated renderer
+	if block.SourceType == SourceChat && len(block.TurnParts) > 0 {
+		return formatTranscriptBlockHTML(block)
+	}
+
 	var sb strings.Builder
 
 	sb.WriteString("<article class=\"block\">\n")
@@ -1518,6 +1611,118 @@ br { display: block; content: ""; margin: 0.3rem 0; }
   box-sizing: border-box;
 }
 .col-filter:focus { border-color: #3B82F6; }
+
+/* --- Transcript --- */
+.transcript {
+  max-width: 900px;
+  margin: 0 auto;
+  padding: 1rem 1.5rem 3rem;
+}
+.transcript-header {
+  position: sticky;
+  top: 0;
+  background: #FFFFFF;
+  border-bottom: 1px solid #E2E8F0;
+  padding: 0.75rem 0;
+  margin-bottom: 1.5rem;
+  z-index: 50;
+  display: flex;
+  align-items: baseline;
+  gap: 1rem;
+}
+.transcript-title {
+  font-size: 14px;
+  font-weight: 600;
+  color: #0A1628;
+}
+.transcript-meta {
+  font-size: 12px;
+  color: #64748B;
+  font-family: 'JetBrains Mono', monospace;
+}
+.turn {
+  margin-bottom: 1.5rem;
+  padding-bottom: 1.5rem;
+  border-bottom: 1px solid #F1F5F9;
+}
+.turn:last-child { border-bottom: none; }
+.turn-gutter {
+  color: #64748B;
+  font-size: 12px;
+  font-family: 'JetBrains Mono', monospace;
+  margin-bottom: 0.5rem;
+}
+.turn-user {
+  background: #1E293B;
+  color: #F8FAFC;
+  padding: 0.75rem 1rem;
+  border-radius: 6px;
+  margin-bottom: 0.75rem;
+}
+.turn-user pre {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 14px;
+  white-space: pre-wrap;
+  word-break: break-word;
+  margin: 0;
+  color: inherit;
+  background: transparent;
+}
+.turn-assistant {
+  padding: 0.5rem 0;
+}
+.turn-assistant .content { padding: 0; }
+.turn-diff {
+  margin: 0.75rem 0;
+}
+.turn-diff-header {
+  font-size: 12px;
+  color: #64748B;
+  font-family: 'JetBrains Mono', monospace;
+  margin-bottom: 0.25rem;
+}
+.turn-tool {
+  margin: 0.5rem 0;
+  border-left: 3px solid #E2E8F0;
+  padding-left: 0.75rem;
+}
+.turn-tool summary {
+  font-size: 13px;
+  color: #64748B;
+  cursor: pointer;
+  font-family: 'JetBrains Mono', monospace;
+  padding: 0.25rem 0;
+}
+.turn-tool summary:hover { color: #1E293B; }
+.turn-tool pre {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 13px;
+  white-space: pre-wrap;
+  word-break: break-word;
+  color: #334155;
+  background: #F8FAFC;
+  padding: 0.5rem 0.75rem;
+  border-radius: 4px;
+  margin-top: 0.25rem;
+  max-height: 300px;
+  overflow-y: auto;
+}
+.turn-question {
+  background: #FFFBEB;
+  border: 1px solid #FDE68A;
+  border-radius: 6px;
+  padding: 0.75rem 1rem;
+  margin: 0.5rem 0;
+}
+.turn-question pre {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 14px;
+  white-space: pre-wrap;
+  word-break: break-word;
+  margin: 0;
+  color: #92400E;
+  background: transparent;
+}
 `
 }
 
@@ -1545,48 +1750,71 @@ func RenderStaticHTMLPage(title string, blocks []Block, showLineNums bool) strin
 	sb.WriteString("</style>\n")
 	sb.WriteString("</head>\n<body>\n")
 
-	// Collect headers for TOC
-	headers := collectHeaders(blocks)
+	transcript := isTranscriptContent(blocks)
 
-	// TOC sidebar
-	if len(headers) > 1 {
-		sb.WriteString("<nav id=\"toc\" class=\"toc\">\n")
-		sb.WriteString("<div class=\"toc-toggle\" onclick=\"document.getElementById('toc').classList.toggle('collapsed')\" title=\"Toggle TOC\">&#9776;</div>\n")
-		sb.WriteString("<div class=\"toc-content\">\n")
-		sb.WriteString(fmt.Sprintf("<div class=\"toc-title\">%s</div>\n", html.EscapeString(title)))
-		for _, h := range headers {
-			class := "toc-h1"
-			if h.level == 2 {
-				class = "toc-h2"
-			} else if h.level == 3 {
-				class = "toc-h3"
-			}
-			sb.WriteString(fmt.Sprintf("<a class=\"toc-link %s\" href=\"#%s\" data-target=\"%s\">%s</a>\n",
-				class, h.id, h.id, html.EscapeString(h.text)))
+	if transcript {
+		// Transcript mode: no TOC, sticky header, centered container
+		sb.WriteString("<main class=\"transcript\">\n")
+		sb.WriteString("<div class=\"transcript-header\">\n")
+		sb.WriteString(fmt.Sprintf("<div class=\"transcript-title\">%s</div>\n", html.EscapeString(title)))
+		sb.WriteString(fmt.Sprintf("<div class=\"transcript-meta\">%d turns</div>\n", len(blocks)))
+		sb.WriteString("</div>\n")
+
+		for i := range blocks {
+			sb.WriteString(formatBlockHTML(&blocks[i], showLineNums, false))
 		}
-		sb.WriteString("</div>\n</nav>\n")
+
+		sb.WriteString("</main>\n")
+
+		sb.WriteString("<script>\n")
+		sb.WriteString(staticScript())
+		sb.WriteString("\nwindow.scrollTo(0, document.body.scrollHeight);\n")
+		sb.WriteString("</script>\n")
+	} else {
+		// Standard mode: TOC, search, normal container
+		headers := collectHeaders(blocks)
+
+		// TOC sidebar
+		if len(headers) > 1 {
+			sb.WriteString("<nav id=\"toc\" class=\"toc\">\n")
+			sb.WriteString("<div class=\"toc-toggle\" onclick=\"document.getElementById('toc').classList.toggle('collapsed')\" title=\"Toggle TOC\">&#9776;</div>\n")
+			sb.WriteString("<div class=\"toc-content\">\n")
+			sb.WriteString(fmt.Sprintf("<div class=\"toc-title\">%s</div>\n", html.EscapeString(title)))
+			for _, h := range headers {
+				class := "toc-h1"
+				if h.level == 2 {
+					class = "toc-h2"
+				} else if h.level == 3 {
+					class = "toc-h3"
+				}
+				sb.WriteString(fmt.Sprintf("<a class=\"toc-link %s\" href=\"#%s\" data-target=\"%s\">%s</a>\n",
+					class, h.id, h.id, html.EscapeString(h.text)))
+			}
+			sb.WriteString("</div>\n</nav>\n")
+		}
+
+		// Main content
+		containerClass := "container"
+		if len(headers) > 1 {
+			containerClass = "container has-toc"
+		}
+		sb.WriteString(fmt.Sprintf("<main class=\"%s\">\n", containerClass))
+
+		singleBlock := len(blocks) == 1
+		for i := range blocks {
+			sb.WriteString(formatBlockHTML(&blocks[i], showLineNums, singleBlock))
+		}
+
+		sb.WriteString("</main>\n")
+
+		// Search overlay
+		sb.WriteString(searchOverlayHTML())
+
+		sb.WriteString("<script>\n")
+		sb.WriteString(staticScript())
+		sb.WriteString("</script>\n")
 	}
 
-	// Main content
-	containerClass := "container"
-	if len(headers) > 1 {
-		containerClass = "container has-toc"
-	}
-	sb.WriteString(fmt.Sprintf("<main class=\"%s\">\n", containerClass))
-
-	singleBlock := len(blocks) == 1
-	for i := range blocks {
-		sb.WriteString(formatBlockHTML(&blocks[i], showLineNums, singleBlock))
-	}
-
-	sb.WriteString("</main>\n")
-
-	// Search overlay
-	sb.WriteString(searchOverlayHTML())
-
-	sb.WriteString("<script>\n")
-	sb.WriteString(staticScript())
-	sb.WriteString("</script>\n")
 	sb.WriteString("</body>\n</html>\n")
 
 	return sb.String()
