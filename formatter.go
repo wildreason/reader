@@ -944,7 +944,7 @@ func processInlineCode(text string) string {
 func processLinks(text string) string {
 	// Match [text](url) pattern
 	linkRegex := regexp.MustCompile(`\[([^\]]+)\]\(([^)]+)\)`)
-	// Replace with blue colored format: [blue]text[white] (URL is hidden but preserved in FullText)
+	// Replace with blue colored format: [blue]text[white]
 	// This makes links visually distinct and intuitive, like web browsers
 	return linkRegex.ReplaceAllString(text, "[blue]$1[white]")
 }
@@ -1049,75 +1049,6 @@ func stripTviewTags(s string) string {
 		// Not a tview tag, keep the brackets
 		return match
 	})
-}
-
-// FormatBlockList renders a list of available blocks
-func FormatBlockList(names []string) string {
-	if len(names) == 0 {
-		return "No blocks found."
-	}
-
-	return "Available blocks: " + strings.Join(names, " | ")
-}
-
-// FormatHelp returns help text
-func FormatHelp() string {
-	return `Commands (single-letter preferred):
-  j              - next block
-  k              - prev block
-  l              - list all blocks
-  i <name>       - jump to block (fuzzy match)
-  h              - show help
-  q              - quit
-
-  next           - go to next block
-  prev           - go to previous block
-  list           - show all available blocks
-  jump <name>    - jump to a block
-  help           - show this help
-  quit / exit    - exit program
-
-Examples:
-  > j
-  > k
-  > l
-  > i intro
-  > i setup`
-}
-
-// FormatError returns a formatted error message
-func FormatError(msg string) string {
-	return fmt.Sprintf("Error: %s", msg)
-}
-
-// FormatNotFound returns a formatted "not found" message with suggestions
-func FormatNotFound(query string, availableBlocks []string) string {
-	msg := fmt.Sprintf("Block '%s' not found.", query)
-
-	// Try to find close matches
-	matches := findClosestMatches(query, availableBlocks, 3)
-	if len(matches) > 0 {
-		msg += "\nDid you mean: " + strings.Join(matches, ", ") + "?"
-	}
-
-	return msg
-}
-
-// findClosestMatches finds blocks that contain the query string
-func findClosestMatches(query string, blocks []string, limit int) []string {
-	query = strings.ToLower(query)
-	var matches []string
-
-	for _, block := range blocks {
-		if strings.Contains(strings.ToLower(block), query) {
-			matches = append(matches, block)
-			if len(matches) >= limit {
-				break
-			}
-		}
-	}
-
-	return matches
 }
 
 // isTableLine checks if a line is part of a markdown table

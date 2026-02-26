@@ -10,16 +10,6 @@ import (
 
 var videoExtensions = []string{".mp4", ".webm", ".mov", ".mkv"}
 
-func isVideoFile(path string) bool {
-	ext := strings.ToLower(filepath.Ext(path))
-	for _, e := range videoExtensions {
-		if ext == e {
-			return true
-		}
-	}
-	return false
-}
-
 func viewVideo(path string) {
 	info, err := os.Stat(path)
 	if err != nil {

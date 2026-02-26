@@ -24,7 +24,7 @@ func (p *DiffParser) Parse(content string) []Block {
 				Name:        "diff",
 				Content:     content,
 				LineNum:     0,
-				FullText:    content,
+	
 				Pages:       []string{content},
 				TotalPages:  1,
 				ContentType: BlockContentPlain,
@@ -42,7 +42,7 @@ func (p *DiffParser) Parse(content string) []Block {
 				Name:        "diff",
 				Content:     content,
 				LineNum:     0,
-				FullText:    content,
+	
 				Pages:       []string{content},
 				TotalPages:  1,
 				ContentType: BlockContentDiff,
@@ -72,7 +72,7 @@ func (p *DiffParser) Parse(content string) []Block {
 			Name:        filename,
 			Content:     content,
 			LineNum:     0,
-			FullText:    content,
+
 			Pages:       pages,
 			TotalPages:  len(hunks),
 			ContentType: BlockContentDiff,

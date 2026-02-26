@@ -65,7 +65,6 @@ func (p *TodoParser) Parse(content string) []Block {
 			Name:        fmt.Sprintf("[yellow]todos[-] [#808080]%d/%d[-]", completed, len(todos)),
 			Content:     blockContent,
 			LineNum:     0,
-			FullText:    blockContent,
 			Pages:       []string{blockContent},
 			TotalPages:  1,
 			ContentType: BlockContentPlain,

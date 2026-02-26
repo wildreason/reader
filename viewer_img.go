@@ -6,22 +6,11 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strconv"
-	"strings"
 
 	"golang.org/x/term"
 )
 
 var imageExtensions = []string{".png", ".jpg", ".jpeg", ".gif", ".bmp", ".webp", ".ico", ".svg"}
-
-func isImageFile(path string) bool {
-	ext := strings.ToLower(filepath.Ext(path))
-	for _, e := range imageExtensions {
-		if ext == e {
-			return true
-		}
-	}
-	return false
-}
 
 func imgTermWidth() string {
 	if term.IsTerminal(int(os.Stdout.Fd())) {

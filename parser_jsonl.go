@@ -575,7 +575,7 @@ func (p *JSONLParser) ParseSingleLine(line string, turnNumber int) *Block {
 		Name:        blockName,
 		Content:     fullContent,
 		LineNum:     0,
-		FullText:    fullContent,
+
 		Pages:       pages,
 		TotalPages:  len(pages),
 		ContentType: BlockContentPlain, // User/assistant messages are plain text
@@ -801,7 +801,7 @@ func (p *JSONLParser) CreateTurnBlock(turn *ConversationTurn, turnNumber int) Bl
 		Name:        name,
 		Content:     fullContent,
 		LineNum:     turn.LineNum,
-		FullText:    fullContent,
+
 		Pages:       []string{fullContent},
 		TotalPages:  1,
 		ContentType: BlockContentPlain,
@@ -896,7 +896,6 @@ func (p *JSONLParser) createDiffBlock(msg map[string]interface{}, diffNumber int
 		Name:        name,
 		Content:     diffContent,
 		LineNum:     lineNum,
-		FullText:    diffContent,
 		Pages:       pages,
 		TotalPages:  numHunks,
 		ContentType: BlockContentDiff,

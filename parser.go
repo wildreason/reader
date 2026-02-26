@@ -25,7 +25,6 @@ type Block struct {
 	Name        string
 	Content     string             // Full content (untruncated)
 	LineNum     int
-	FullText    string             // header + content for context
 	Pages       []string           // Content split into pages
 	TotalPages  int
 	ContentType BlockContentType   // Default content type (for simple blocks)
@@ -173,7 +172,6 @@ func (p *MarkdownParser) ParseContinuous(content string, termHeight int) []Block
 		Name:          pageMeta[0], // First page breadcrumb as block name
 		Content:       content,
 		LineNum:       0,
-		FullText:      content,
 		Pages:         pages,
 		TotalPages:    len(pages),
 		ContentType:   BlockContentPlain,
@@ -214,7 +212,6 @@ func createBlock(header string, contentLines []string, lineNum int) Block {
 		Name:          header,
 		Content:       fullContent,
 		LineNum:       lineNum,
-		FullText:      "# " + header + "\n" + fullContent,
 		Pages:         pages,
 		TotalPages:    len(pages),
 		ContentType:   contentType,
