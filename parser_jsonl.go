@@ -804,11 +804,12 @@ func (p *JSONLParser) CreateTurnBlock(turn *ConversationTurn, turnNumber int) Bl
 
 		Pages:       []string{fullContent},
 		TotalPages:  1,
-		ContentType: BlockContentPlain,
-		PageTypes:   []BlockContentType{BlockContentPlain},
+		ContentType: BlockContentTranscript,
+		PageTypes:   []BlockContentType{BlockContentTranscript},
 		PageMeta:    []string{""},
 		SourceType:  SourceChat,
 		TurnParts:   turn.Parts,
+		Data:        &TranscriptData{TurnParts: turn.Parts},
 	}
 }
 

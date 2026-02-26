@@ -95,47 +95,57 @@ func TestProcessInlineHTML_PreservesNormalLinks(t *testing.T) {
 	}
 }
 
-// --- Video player HTML ---
+// --- Video block HTML ---
 
-func TestVideoPlayerHTML_EscapesTitle(t *testing.T) {
-	result := videoPlayerHTML(`<img src=x onerror=alert(1)>.mp4`, "/video", "video/mp4")
-	if strings.Contains(result, `<img src=x`) {
-		t.Errorf("videoPlayerHTML should escape title, got unescaped HTML in output")
+func TestVideoBlockHTML_EscapesTitle(t *testing.T) {
+	block := Block{
+		Name:        `<img src=x onerror=alert(1)>.mp4`,
+		ContentType: BlockContentVideo,
+		Data: &VideoData{
+			Src:  "/video",
+			MIME: "video/mp4",
+		},
 	}
-	if !strings.Contains(result, "&lt;img") {
-		t.Errorf("videoPlayerHTML should contain escaped title")
+	result := formatVideoBlockHTML(&block)
+	if strings.Contains(result, `<img src=x`) {
+		t.Errorf("formatVideoBlockHTML should escape title, got unescaped HTML in output")
 	}
 }
 
-func TestVideoPlayerHTML_EscapesMime(t *testing.T) {
-	result := videoPlayerHTML("test.mp4", "/video", `"><script>alert(1)</script>`)
+func TestVideoBlockHTML_EscapesMime(t *testing.T) {
+	block := Block{
+		Name:        "test.mp4",
+		ContentType: BlockContentVideo,
+		Data: &VideoData{
+			Src:  "/video",
+			MIME: `"><script>alert(1)</script>`,
+		},
+	}
+	result := formatVideoBlockHTML(&block)
 	if strings.Contains(result, "<script>alert") {
-		t.Errorf("videoPlayerHTML should escape mime type")
+		t.Errorf("formatVideoBlockHTML should escape mime type")
 	}
 }
 
 // --- Contract renderer ---
 
-func TestRenderContractHTMLPage_EscapesFrontmatter(t *testing.T) {
-	fm := Frontmatter{
-		Title: `<script>alert("xss")</script>`,
-		Raw: map[string]string{
-			"parties":   `<img src=x onerror=alert(1)>`,
-			"effective": `2026-01-01" onclick="alert(1)`,
-		},
+func TestContractPipeline_EscapesFrontmatter(t *testing.T) {
+	content := "---\ntitle: <script>alert(\"xss\")</script>\ntype: contract\nparties: <img src=x onerror=alert(1)>\neffective: 2026-01-01\" onclick=\"alert(1)\n---\n## 1. Test\n\nBody text."
+	parser := &ContractParser{}
+	blocks := parser.Parse(content)
+	if len(blocks) == 0 {
+		t.Fatal("ContractParser should produce blocks")
 	}
-	result := RenderContractHTMLPage(fm.Title, "## 1. Test\n\nBody text.", fm)
+	result := RenderStaticHTMLPage("Test", blocks, false)
 
 	if strings.Contains(result, "<script>alert") {
-		t.Errorf("RenderContractHTMLPage should escape title")
+		t.Errorf("Contract pipeline should escape title")
 	}
 	if strings.Contains(result, `<img src=x`) {
-		t.Errorf("RenderContractHTMLPage should escape parties")
+		t.Errorf("Contract pipeline should escape parties")
 	}
-	// effective date has " which should be escaped to &quot;
-	// the raw string should not appear unescaped in an attribute context
 	if strings.Contains(result, `"alert(1)`) {
-		t.Errorf("RenderContractHTMLPage should escape quotes in effective date")
+		t.Errorf("Contract pipeline should escape quotes in effective date")
 	}
 }
 

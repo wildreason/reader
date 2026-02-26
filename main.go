@@ -2,7 +2,6 @@ package main
 
 import (
 	"bufio"
-	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -111,6 +110,7 @@ func detectParser(filePath string) Parser {
 		&TodoParser{},
 		&DiffParser{},
 		&CsvParser{},
+		&ContractParser{},
 		&MarkdownParser{},
 		&JSONLParser{},
 		&TxtParser{},
@@ -312,78 +312,51 @@ func viewFile(filePath string) {
 		return
 	}
 
-	if detectFileType(filePath) == "img" {
+	ft := detectFileType(filePath)
+
+	if ft == "img" {
 		AddRecent(filePath)
-		if exportHTML {
-			exportImageHTML(filePath)
-			return
-		}
-		if servePort > 0 {
-			serveImageHTML(filePath, servePort)
+		if exportHTML || servePort > 0 {
+			parser := &ImageParser{}
+			blocks, err := parser.ParseFile(filePath, exportHTML)
+			if err != nil {
+				fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+				os.Exit(1)
+			}
+			if exportHTML {
+				title := filepath.Base(filePath)
+				fmt.Print(RenderStaticHTMLPage(title, blocks, false))
+				return
+			}
+			serveHTML(filePath, blocks, servePort)
 			return
 		}
 		viewImage(filePath)
 		return
 	}
 
-	if detectFileType(filePath) == "vid" {
+	if ft == "vid" {
 		AddRecent(filePath)
-		if exportHTML {
-			exportVideoHTML(filePath)
-			return
-		}
-		if servePort > 0 {
-			serveVideoHTML(filePath, servePort)
+		if exportHTML || servePort > 0 {
+			parser := &VideoParser{}
+			blocks, err := parser.ParseFile(filePath, exportHTML)
+			if err != nil {
+				fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+				os.Exit(1)
+			}
+			if exportHTML {
+				title := filepath.Base(filePath)
+				fmt.Print(RenderStaticHTMLPage(title, blocks, false))
+				return
+			}
+			serveHTML(filePath, blocks, servePort)
 			return
 		}
 		viewVideo(filePath)
 		return
 	}
+
 	viewTextFile(filePath, forceType, false)
-}
-
-// exportImageHTML reads an image file and outputs a self-contained HTML page to stdout
-func exportImageHTML(filePath string) {
-	data, err := os.ReadFile(filePath)
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "Error: Could not read file '%s': %v\n", filePath, err)
-		os.Exit(1)
-	}
-	ext := filepath.Ext(filePath)
-	mime := imageMIME(ext)
-	b64 := base64.StdEncoding.EncodeToString(data)
-	dataURI := fmt.Sprintf("data:%s;base64,%s", mime, b64)
-	title := filepath.Base(filePath)
-	fmt.Print(RenderStaticImageHTML(title, dataURI))
-}
-
-// exportVideoHTML reads a video file and outputs a self-contained HTML page to stdout
-func exportVideoHTML(filePath string) {
-	info, err := os.Stat(filePath)
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "Error: Could not stat file '%s': %v\n", filePath, err)
-		os.Exit(1)
-	}
-	title := filepath.Base(filePath)
-	ext := filepath.Ext(filePath)
-	mime := videoMIME(ext)
-
-	const maxInlineSize = 10 * 1024 * 1024 // 10MB
-	if info.Size() >= maxInlineSize {
-		fmt.Fprintf(os.Stderr, "Warning: %s is %dMB, too large to inline as base64. Referencing file path.\n",
-			title, info.Size()/(1024*1024))
-		fmt.Print(RenderStaticVideoHTML(title, filePath, mime, false))
-		return
-	}
-
-	data, err := os.ReadFile(filePath)
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "Error: Could not read file '%s': %v\n", filePath, err)
-		os.Exit(1)
-	}
-	b64 := base64.StdEncoding.EncodeToString(data)
-	dataURI := fmt.Sprintf("data:%s;base64,%s", mime, b64)
-	fmt.Print(RenderStaticVideoHTML(title, dataURI, mime, true))
 }
 
 // listDirectory prints a formatted table of markdown files in a directory
@@ -492,11 +465,13 @@ func viewTextFile(filePath string, forceType string, follow bool) {
 		return
 	}
 
+	_, isContract := parser.(*ContractParser)
+
 	// Static HTML export
 	if exportHTML {
 		isCSVType := forceType == "csv" || detectFileType(filePath) == "csv"
 		var blocks []Block
-		if isJSONL || isCSVType {
+		if isJSONL || isCSVType || isContract {
 			blocks = parser.Parse(fileContent)
 		} else {
 			contentType := BlockContentPlain
@@ -518,21 +493,12 @@ func viewTextFile(filePath string, forceType string, follow bool) {
 		if fm.Title != "" {
 			title = fm.Title
 		}
-		if !isJSONL && !isCSVType {
+		if !isJSONL && !isCSVType && !isContract {
 			blocks[0].Content = body
 			blocks[0].Pages = []string{body}
 		}
 		fmt.Print(RenderStaticHTMLPage(title, blocks, showLineNumbers))
 		return
-	}
-
-	// Contract type: own server, dispatched before generic serveHTML
-	if servePort > 0 {
-		fm, _ := ParseFrontmatter(fileContent)
-		if fm.Type == "contract" {
-			serveContractHTML(filePath, servePort)
-			return
-		}
 	}
 
 	// For --port mode, render as single block so HTML formatter handles headings natively
@@ -544,7 +510,7 @@ func viewTextFile(filePath string, forceType string, follow bool) {
 			filters := showContentSelector(fileContent)
 			jsonlParser.Filters = filters
 			blocks = jsonlParser.Parse(fileContent)
-		} else if isCSVType {
+		} else if isCSVType || isContract {
 			blocks = parser.Parse(fileContent)
 		} else {
 			// Single block: let HTML render h1/h2/h3 directly instead of splitting by headers
@@ -833,13 +799,35 @@ func runSubcommand(typeName string, ft fileType, args []string) {
 
 	if typeName == "img" {
 		AddRecent(filePath)
-		viewImage(filePath)
+		if exportHTML || servePort > 0 {
+			parser := &ImageParser{}
+			blocks, err := parser.ParseFile(filePath, exportHTML)
+			if err != nil {
+				fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+				os.Exit(1)
+			}
+			if exportHTML {
+				fmt.Print(RenderStaticHTMLPage(filepath.Base(filePath), blocks, false))
+			} else {
+				serveHTML(filePath, blocks, servePort)
+			}
+		} else {
+			viewImage(filePath)
+		}
 	} else if typeName == "vid" {
 		AddRecent(filePath)
-		if exportHTML {
-			exportVideoHTML(filePath)
-		} else if servePort > 0 {
-			serveVideoHTML(filePath, servePort)
+		if exportHTML || servePort > 0 {
+			parser := &VideoParser{}
+			blocks, err := parser.ParseFile(filePath, exportHTML)
+			if err != nil {
+				fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+				os.Exit(1)
+			}
+			if exportHTML {
+				fmt.Print(RenderStaticHTMLPage(filepath.Base(filePath), blocks, false))
+			} else {
+				serveHTML(filePath, blocks, servePort)
+			}
 		} else {
 			viewVideo(filePath)
 		}

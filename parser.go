@@ -20,6 +20,12 @@ type Parser interface {
 	Detect(filePath string) bool // Auto-detect if this parser can handle the file
 }
 
+// FileParser extends Parser for binary/file-based content (images, video)
+type FileParser interface {
+	Parser
+	ParseFile(filePath string, static bool) ([]Block, error)
+}
+
 // Block represents a markdown block with header and content
 type Block struct {
 	Name        string
@@ -34,6 +40,7 @@ type Block struct {
 	TurnParts     []TurnPart         // Structured conversation parts for web rendering
 	PageStartLine []int             // 1-indexed file line number for first content line of each page
 	CsvRecords    [][]string        // Raw CSV records (header + data rows) for structured rendering
+	Data          interface{}        // Typed payload: *ImageData, *VideoData, *CsvData, etc.
 }
 
 // LinesPerPage is the fixed number of lines per page in e-reader mode

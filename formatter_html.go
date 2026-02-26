@@ -4,6 +4,7 @@ import (
 	"crypto/sha1"
 	"fmt"
 	"html"
+	"path/filepath"
 	"regexp"
 	"strings"
 	"time"
@@ -286,10 +287,10 @@ func headerID(text string) string {
 	return text
 }
 
-// isTranscriptContent checks if any block has SourceType == SourceChat
+// isTranscriptContent checks if any block is a transcript
 func isTranscriptContent(blocks []Block) bool {
 	for _, b := range blocks {
-		if b.SourceType == SourceChat {
+		if b.ContentType == BlockContentTranscript || b.SourceType == SourceChat {
 			return true
 		}
 	}
@@ -309,7 +310,15 @@ func formatTranscriptBlockHTML(block *Block) string {
 	sb.WriteString("<div class=\"turn\">\n")
 	sb.WriteString(fmt.Sprintf("<div class=\"turn-gutter\">%s</div>\n", html.EscapeString(turnLabel)))
 
-	for _, part := range block.TurnParts {
+	// Prefer typed Data, fall back to legacy TurnParts
+	var parts []TurnPart
+	if tData, ok := block.Data.(*TranscriptData); ok {
+		parts = tData.TurnParts
+	} else {
+		parts = block.TurnParts
+	}
+
+	for _, part := range parts {
 		switch part.Type {
 		case "user":
 			sb.WriteString("<div class=\"turn-user\"><pre>")
@@ -355,8 +364,23 @@ func formatTranscriptBlockHTML(block *Block) string {
 // When singleBlock is true, the block header bar is hidden (headings are in the content)
 func formatBlockHTML(block *Block, showLineNums bool, singleBlock bool) string {
 	// Transcript blocks use dedicated renderer
-	if block.SourceType == SourceChat && len(block.TurnParts) > 0 {
+	if block.ContentType == BlockContentTranscript || (block.SourceType == SourceChat && len(block.TurnParts) > 0) {
 		return formatTranscriptBlockHTML(block)
+	}
+
+	// Image blocks: dedicated renderer
+	if block.ContentType == BlockContentImage {
+		return formatImageBlockHTML(block)
+	}
+
+	// Video blocks: dedicated renderer
+	if block.ContentType == BlockContentVideo {
+		return formatVideoBlockHTML(block)
+	}
+
+	// Contract blocks: dedicated renderer
+	if block.ContentType == BlockContentContract {
+		return formatContractBlockHTML(block)
 	}
 
 	var sb strings.Builder
@@ -396,6 +420,129 @@ func formatBlockHTML(block *Block, showLineNums bool, singleBlock bool) string {
 	return sb.String()
 }
 
+// formatImageBlockHTML renders an image block as HTML
+func formatImageBlockHTML(block *Block) string {
+	imgData, ok := block.Data.(*ImageData)
+	if !ok {
+		return "<p>Error: missing image data</p>\n"
+	}
+
+	var sb strings.Builder
+	sb.WriteString("<div class=\"content image-content\">\n")
+
+	src := imgData.Src
+	if !imgData.Inline {
+		// Server mode: reference the asset route
+		src = "/asset/" + html.EscapeString(filepath.Base(imgData.Alt))
+	}
+
+	sb.WriteString(fmt.Sprintf("<div class=\"title\" style=\"text-align:center;font-size:14px;font-weight:600;color:#64748B;margin-bottom:1.5rem\">%s</div>\n", html.EscapeString(imgData.Alt)))
+	sb.WriteString("<div class=\"img-container\" style=\"text-align:center\">\n")
+	sb.WriteString(fmt.Sprintf("  <img src=\"%s\" alt=\"%s\" style=\"max-width:100%%;max-height:85vh;border-radius:6px;border:1px solid #E2E8F0;cursor:pointer\" onclick=\"this.classList.toggle('expanded')\">\n",
+		src, html.EscapeString(imgData.Alt)))
+	sb.WriteString("</div>\n")
+	sb.WriteString("</div>\n")
+	return sb.String()
+}
+
+// formatVideoBlockHTML renders a video block as HTML
+func formatVideoBlockHTML(block *Block) string {
+	vidData, ok := block.Data.(*VideoData)
+	if !ok {
+		return "<p>Error: missing video data</p>\n"
+	}
+
+	var sb strings.Builder
+	title := html.EscapeString(block.Name)
+
+	src := vidData.Src
+	if !vidData.Inline {
+		// Server mode: reference the asset route
+		src = "/asset/" + html.EscapeString(block.Name)
+	}
+	mime := html.EscapeString(vidData.MIME)
+
+	sb.WriteString("<div class=\"content video-content\" style=\"display:flex;flex-direction:column;align-items:center\">\n")
+	sb.WriteString(fmt.Sprintf("<div class=\"title\" style=\"font-size:14px;font-weight:600;color:#64748B;margin-bottom:1.5rem\">%s</div>\n", title))
+	sb.WriteString("<div class=\"video-container\" style=\"max-width:960px;width:100%%\">\n")
+	sb.WriteString(fmt.Sprintf("  <video id=\"player\" controls style=\"width:100%%;border-radius:6px;border:1px solid #E2E8F0;background:#0A1628;outline:none\">\n    <source src=\"%s\" type=\"%s\">\n  </video>\n", src, mime))
+
+	// Speed controls
+	sb.WriteString(`  <div class="controls" style="display:flex;align-items:center;gap:0.75rem;margin-top:0.75rem;font-size:13px;color:#64748B;font-family:'JetBrains Mono',monospace">
+    <span id="time-display">0:00 / 0:00</span>
+    <span style="flex:1"></span>
+    <button class="speed-btn" data-speed="0.5" style="background:#F8FAFC;border:1px solid #E2E8F0;border-radius:4px;padding:0.2rem 0.5rem;font-size:12px;font-family:'JetBrains Mono',monospace;color:#64748B;cursor:pointer">0.5x</button>
+    <button class="speed-btn active" data-speed="1" style="background:#3B82F6;border:1px solid #3B82F6;border-radius:4px;padding:0.2rem 0.5rem;font-size:12px;font-family:'JetBrains Mono',monospace;color:#FFFFFF;cursor:pointer">1x</button>
+    <button class="speed-btn" data-speed="1.5" style="background:#F8FAFC;border:1px solid #E2E8F0;border-radius:4px;padding:0.2rem 0.5rem;font-size:12px;font-family:'JetBrains Mono',monospace;color:#64748B;cursor:pointer">1.5x</button>
+    <button class="speed-btn" data-speed="2" style="background:#F8FAFC;border:1px solid #E2E8F0;border-radius:4px;padding:0.2rem 0.5rem;font-size:12px;font-family:'JetBrains Mono',monospace;color:#64748B;cursor:pointer">2x</button>
+  </div>
+  <div style="margin-top:1rem;font-size:12px;color:#94A3B8">
+    <kbd style="background:#F8FAFC;border:1px solid #E2E8F0;border-radius:3px;padding:0.1rem 0.35rem;font-family:'JetBrains Mono',monospace;font-size:11px">Space</kbd> play/pause
+    <kbd style="background:#F8FAFC;border:1px solid #E2E8F0;border-radius:3px;padding:0.1rem 0.35rem;font-family:'JetBrains Mono',monospace;font-size:11px">F</kbd> fullscreen
+    <kbd style="background:#F8FAFC;border:1px solid #E2E8F0;border-radius:3px;padding:0.1rem 0.35rem;font-family:'JetBrains Mono',monospace;font-size:11px">&#x2190;</kbd> -5s
+    <kbd style="background:#F8FAFC;border:1px solid #E2E8F0;border-radius:3px;padding:0.1rem 0.35rem;font-family:'JetBrains Mono',monospace;font-size:11px">&#x2192;</kbd> +5s
+  </div>
+`)
+	sb.WriteString("</div>\n")
+	sb.WriteString("</div>\n")
+	return sb.String()
+}
+
+// formatContractBlockHTML renders a contract block as HTML
+func formatContractBlockHTML(block *Block) string {
+	cData, ok := block.Data.(*ContractData)
+	if !ok {
+		return "<p>Error: missing contract data</p>\n"
+	}
+
+	var sb strings.Builder
+
+	// Contract header
+	sb.WriteString("<div class=\"contract-header\" style=\"margin-bottom:2rem;padding-bottom:1rem;border-bottom:1px solid #E2E8F0\">\n")
+	if cData.Parties != "" {
+		sb.WriteString(fmt.Sprintf("<div style=\"font-size:13px;color:#64748B;font-weight:600;text-transform:uppercase;letter-spacing:0.03em\">%s</div>\n", html.EscapeString(cData.Parties)))
+	}
+	if cData.Effective != "" {
+		sb.WriteString(fmt.Sprintf("<div style=\"font-size:13px;color:#94A3B8;margin-top:0.25rem\">Effective %s</div>\n", html.EscapeString(cData.Effective)))
+	}
+	sb.WriteString("</div>\n")
+
+	// Preamble
+	if cData.Preamble != "" {
+		sb.WriteString("<div class=\"contract-preamble\" style=\"margin-bottom:2.5rem\">\n")
+		sb.WriteString(renderPreambleHTML(cData.Preamble))
+		sb.WriteString("</div>\n")
+	}
+
+	// Clauses
+	for _, clause := range cData.Clauses {
+		levelClass := "clause-l1"
+		indent := ""
+		if clause.Level == 2 {
+			levelClass = "clause-l2"
+			indent = " style=\"margin-left:1.5rem\""
+		}
+
+		sb.WriteString(fmt.Sprintf("<section class=\"clause %s\"%s id=\"clause-%s\">\n",
+			levelClass, indent, html.EscapeString(clause.ID)))
+
+		tag := "h2"
+		if clause.Level == 2 {
+			tag = "h3"
+		}
+		sb.WriteString(fmt.Sprintf("<%s style=\"font-size:20px;font-weight:600;color:#0A1628;margin-bottom:0.75rem\"><span style=\"font-family:'JetBrains Mono',monospace;font-size:0.85em;color:#64748B\">%s.</span> %s</%s>\n",
+			tag, html.EscapeString(clause.ID), html.EscapeString(clause.Title), tag))
+
+		sb.WriteString("<div class=\"clause-body\">\n")
+		sb.WriteString(renderClauseBodyHTML(clause.Body))
+		sb.WriteString("</div>\n")
+
+		sb.WriteString("</section>\n")
+	}
+
+	return sb.String()
+}
+
 // formatCodeBlockHTML renders content as a single syntax-highlighted code block
 func formatCodeBlockHTML(content string, lang string) string {
 	var sb strings.Builder
@@ -411,7 +558,13 @@ func formatCodeBlockHTML(content string, lang string) string {
 
 // formatCsvHTML renders CSV data as an interactive table with filtering and optional chart
 func formatCsvHTML(block *Block) string {
-	records := block.CsvRecords
+	// Prefer typed Data, fall back to legacy CsvRecords
+	var records [][]string
+	if csvData, ok := block.Data.(*CsvData); ok {
+		records = csvData.Records
+	} else {
+		records = block.CsvRecords
+	}
 	if len(records) < 1 {
 		return "<div class=\"content\"><p>Empty CSV</p></div>\n"
 	}
@@ -1817,174 +1970,6 @@ func RenderStaticHTMLPage(title string, blocks []Block, showLineNums bool) strin
 
 	sb.WriteString("</body>\n</html>\n")
 
-	return sb.String()
-}
-
-// RenderStaticImageHTML renders an image as a self-contained HTML page with base64 data URI
-func RenderStaticImageHTML(title string, dataURI string) string {
-	var sb strings.Builder
-
-	sb.WriteString("<!DOCTYPE html>\n<html lang=\"en\">\n<head>\n")
-	sb.WriteString("<meta charset=\"UTF-8\">\n")
-	sb.WriteString("<meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\">\n")
-	sb.WriteString(fmt.Sprintf("<title>%s</title>\n", html.EscapeString(title)))
-	sb.WriteString(`<style>
-* { margin: 0; padding: 0; box-sizing: border-box; }
-body {
-  background: #FFFFFF;
-  color: #0A1628;
-  font-family: -apple-system, BlinkMacSystemFont, sans-serif;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  min-height: 100vh;
-  padding: 2rem;
-}
-.title {
-  font-size: 14px;
-  font-weight: 600;
-  color: #64748B;
-  margin-bottom: 1.5rem;
-}
-.img-container { max-width: 90vw; }
-.img-container img {
-  max-width: 100%;
-  max-height: 85vh;
-  border-radius: 6px;
-  border: 1px solid #E2E8F0;
-  cursor: pointer;
-  transition: max-width 0.2s, max-height 0.2s;
-}
-.img-container img.expanded { max-width: none; max-height: none; }
-</style>
-`)
-	sb.WriteString("</head>\n<body>\n")
-	sb.WriteString(fmt.Sprintf("<div class=\"title\">%s</div>\n", html.EscapeString(title)))
-	sb.WriteString("<div class=\"img-container\">\n")
-	sb.WriteString(fmt.Sprintf("  <img src=\"%s\" alt=\"%s\" onclick=\"this.classList.toggle('expanded')\">\n",
-		dataURI, html.EscapeString(title)))
-	sb.WriteString("</div>\n")
-	sb.WriteString("</body>\n</html>\n")
-
-	return sb.String()
-}
-
-// RenderStaticVideoHTML renders a video as a self-contained HTML page
-// If inline is true, src is a data URI; otherwise src is a file path reference
-func RenderStaticVideoHTML(title, src, mime string, inline bool) string {
-	var sb strings.Builder
-
-	sb.WriteString("<!DOCTYPE html>\n<html lang=\"en\">\n<head>\n")
-	sb.WriteString("<meta charset=\"UTF-8\">\n")
-	sb.WriteString("<meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\">\n")
-	sb.WriteString(fmt.Sprintf("<title>%s</title>\n", html.EscapeString(title)))
-	sb.WriteString(`<style>
-* { margin: 0; padding: 0; box-sizing: border-box; }
-body {
-  background: #FFFFFF;
-  color: #0A1628;
-  font-family: -apple-system, BlinkMacSystemFont, sans-serif;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  min-height: 100vh;
-  padding: 2rem;
-}
-.title {
-  font-size: 14px;
-  font-weight: 600;
-  color: #64748B;
-  margin-bottom: 1.5rem;
-}
-.video-container { max-width: 90vw; width: 100%; max-width: 960px; }
-.video-container video {
-  width: 100%;
-  border-radius: 6px;
-  border: 1px solid #E2E8F0;
-  background: #0A1628;
-  outline: none;
-}
-.controls {
-  display: flex;
-  align-items: center;
-  gap: 0.75rem;
-  margin-top: 0.75rem;
-  font-size: 13px;
-  color: #64748B;
-  font-family: monospace;
-}
-.speed-btn {
-  background: #F8FAFC;
-  border: 1px solid #E2E8F0;
-  border-radius: 4px;
-  padding: 0.2rem 0.5rem;
-  font-size: 12px;
-  font-family: monospace;
-  color: #64748B;
-  cursor: pointer;
-}
-.speed-btn:hover { border-color: #3B82F6; color: #3B82F6; }
-.speed-btn.active { background: #3B82F6; color: #FFFFFF; border-color: #3B82F6; }
-.notice { color: #94A3B8; font-size: 12px; margin-top: 1rem; }
-</style>
-`)
-	sb.WriteString("</head>\n<body>\n")
-	sb.WriteString(fmt.Sprintf("<div class=\"title\">%s</div>\n", html.EscapeString(title)))
-	sb.WriteString("<div class=\"video-container\">\n")
-
-	if inline {
-		sb.WriteString(fmt.Sprintf("  <video id=\"player\" controls>\n    <source src=\"%s\" type=\"%s\">\n  </video>\n",
-			src, html.EscapeString(mime)))
-	} else {
-		sb.WriteString(fmt.Sprintf("  <video id=\"player\" controls>\n    <source src=\"%s\" type=\"%s\">\n  </video>\n",
-			html.EscapeString(src), html.EscapeString(mime)))
-		sb.WriteString(fmt.Sprintf("  <p class=\"notice\">Video file referenced: %s (too large to inline)</p>\n",
-			html.EscapeString(src)))
-	}
-
-	sb.WriteString(`  <div class="controls">
-    <span id="time-display">0:00 / 0:00</span>
-    <span style="flex:1"></span>
-    <button class="speed-btn" data-speed="0.5">0.5x</button>
-    <button class="speed-btn active" data-speed="1">1x</button>
-    <button class="speed-btn" data-speed="1.5">1.5x</button>
-    <button class="speed-btn" data-speed="2">2x</button>
-  </div>
-</div>
-<script>
-var v = document.getElementById('player');
-var btns = document.querySelectorAll('.speed-btn');
-var timeEl = document.getElementById('time-display');
-btns.forEach(function(btn) {
-  btn.addEventListener('click', function() {
-    v.playbackRate = parseFloat(btn.dataset.speed);
-    btns.forEach(function(b) { b.classList.remove('active'); });
-    btn.classList.add('active');
-  });
-});
-function fmt(s) {
-  var m = Math.floor(s / 60);
-  var sec = Math.floor(s % 60);
-  return m + ':' + (sec < 10 ? '0' : '') + sec;
-}
-v.addEventListener('timeupdate', function() {
-  timeEl.textContent = fmt(v.currentTime) + ' / ' + fmt(v.duration || 0);
-});
-document.addEventListener('keydown', function(e) {
-  if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
-  switch(e.key) {
-    case ' ': e.preventDefault(); v.paused ? v.play() : v.pause(); break;
-    case 'f':
-      if (v.requestFullscreen) v.requestFullscreen();
-      else if (v.webkitRequestFullscreen) v.webkitRequestFullscreen();
-      break;
-    case 'ArrowLeft': e.preventDefault(); v.currentTime = Math.max(0, v.currentTime - 5); break;
-    case 'ArrowRight': e.preventDefault(); v.currentTime = Math.min(v.duration, v.currentTime + 5); break;
-  }
-});
-</script>
-`)
-	sb.WriteString("</body>\n</html>\n")
 	return sb.String()
 }
 

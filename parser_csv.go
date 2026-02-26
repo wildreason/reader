@@ -50,6 +50,7 @@ func (p *CsvParser) Parse(content string) []Block {
 		TotalPages:  1,
 		ContentType: BlockContentCSV,
 		CsvRecords:  records,
+		Data:        &CsvData{Records: records},
 	}}
 }
 
