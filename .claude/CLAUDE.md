@@ -43,23 +43,41 @@ make install   # Install to ~/.local/bin
 
 ## Architecture
 
-Two rendering pipelines from the same parse layer:
+One unified pipeline: every content type follows `Parse -> []Block -> Render -> HTML`.
 
 ```
 main.go              Args, subcommands, routing, flag parsing
      |
-detectFileType()     Route by extension: img -> viewImage, vid -> viewVideo, text -> parser
+detectFileType()     Route by extension: img/vid -> FileParser, text -> Parser
      |
-detectParser()       Auto-detect: .md .jsonl .diff .txt .json .csv
+detectParser()       Auto-detect: .md .jsonl .diff .txt .json .csv + contract (frontmatter)
      |
-parser.Parse()       Extract blocks from content
+parser.Parse()       Extract blocks from content (all types produce []Block)
      |
      +-- TUI path:   reader.go -> formatter.go (tview tags, Catppuccin dark)
      |
-     +-- Web path:   server.go -> formatter_html.go (HTML/CSS/JS, brand light theme)
+     +-- Web path:   server.go -> serveHTML() -> formatBlockHTML() (HTML/CSS/JS, brand light theme)
      |
      +-- Static:     formatter_html.go -> RenderStaticHTMLPage (inlined CSS/JS, no CDN)
 ```
+
+### Block pipeline
+
+All content types produce `[]Block` with typed payloads via `Block.Data`:
+
+| Content type | Parser | Block.ContentType | Block.Data |
+|-------------|--------|-------------------|------------|
+| Markdown | MarkdownParser | BlockContentPlain | - |
+| Diffs | DiffParser | BlockContentDiff | - |
+| CSV/TSV | CsvParser | BlockContentCSV | *CsvData |
+| JSONL | JSONLParser | BlockContentTranscript | *TranscriptData |
+| Images | ImageParser (FileParser) | BlockContentImage | *ImageData |
+| Video | VideoParser (FileParser) | BlockContentVideo | *VideoData |
+| Contracts | ContractParser | BlockContentContract | *ContractData |
+| JSON | TxtParser | BlockContentJSON | - |
+| YAML | TxtParser | BlockContentYAML | - |
+
+`formatBlockHTML()` dispatches all content types. `serveHTML()` is the only server function (plus `serveDirectory` for collections). Binary content (images, video) uses `/asset/{filename}` routes registered by `serveHTML`.
 
 ### Web mode (`--port`)
 
@@ -105,9 +123,13 @@ parser.Parse()       Extract blocks from content
 | File | Purpose |
 |------|---------|
 | `main.go` | Entry, subcommand routing, auto-detect, flag parsing |
-| `viewer_img.go` | Image rendering (chafa/imgcat, iterm/kitty/symbols) |
-| `viewer_video.go` | Video rendering (ffprobe metadata, ffplay playback, web player) |
-| `parser.go` | MarkdownParser, Block struct, BlockIndex |
+| `data_types.go` | Typed Block payloads: ImageData, VideoData, CsvData, TranscriptData, ContractData |
+| `viewer_img.go` | TUI image rendering (chafa/imgcat, iterm/kitty/symbols) |
+| `viewer_video.go` | TUI video rendering (ffprobe metadata, ffplay playback) |
+| `parser.go` | Parser/FileParser interfaces, Block struct, BlockIndex |
+| `parser_image.go` | ImageParser (FileParser for images, base64/asset modes) |
+| `parser_video.go` | VideoParser (FileParser for video, base64/asset modes) |
+| `parser_contract.go` | ContractParser (contracts detected via frontmatter type) |
 | `parser_jsonl.go` | JSONLParser (transcripts) |
 | `parser_diff.go` | DiffParser (unified diffs) |
 | `parser_txt.go` | TxtParser (plain text) |
@@ -118,11 +140,12 @@ parser.Parse()       Extract blocks from content
 | `formatter.go` | TUI block rendering, markdown, tables, line number gutter |
 | `formatter_diff.go` | TUI diff coloring (ANSI) |
 | `formatter_html.go` | Web rendering: HTML/CSS/JS, brand theme, all web features, index page |
+| `formatter_contract.go` | Contract clause parsing and HTML helpers |
 | `formatter_shell.go` | Shell output styling |
 | `frontmatter.go` | YAML frontmatter parser (title, created, tags) |
 | `frontmatter_test.go` | Frontmatter parsing tests |
-| `server.go` | HTTP server, SSE broadcaster, file/dir watcher, live reload |
-| `content_type.go` | Content type detection |
+| `server.go` | HTTP server (serveHTML + serveDirectory), SSE broadcaster, file watcher |
+| `content_type.go` | Block content type constants and detection |
 | `commands.go` | Navigator, command parsing |
 | `recent.go` | Recent file history (pick/latest) |
 | `context_git.go` | Git context for diffs |
@@ -175,9 +198,18 @@ type Parser interface {
     Parse(content string) []Block
     Detect(filePath string) bool
 }
+
+// For binary content (images, video)
+type FileParser interface {
+    Parser
+    ParseFile(filePath string, static bool) ([]Block, error)
+}
 ```
 
-Add new parser: create `parser_xxx.go`, add to `detectParser()` in main.go.
+Add new text parser: create `parser_xxx.go`, implement `Parser`, add to `detectParser()` in main.go.
+Add new binary parser: create `parser_xxx.go`, implement `FileParser`, add dispatch in `viewFile()`.
+
+Typed payloads go in `Block.Data` (defined in `data_types.go`). The `formatBlockHTML()` switch in `formatter_html.go` dispatches rendering by `Block.ContentType`.
 
 ## Release
 
@@ -228,17 +260,20 @@ aster file.md --deploy             # Push to hosting, permanent URL
 
 ### Web rendering status
 
+All content types go through the unified pipeline: `Parser -> []Block -> formatBlockHTML() -> HTML`.
+
 | Content | Web | Gap |
 |---------|-----|-----|
 | Markdown | Full (TOC, search, tables, syntax highlighting, diffs) | None |
 | Diffs | Full (side-by-side, word-level, collapsible) | None |
 | CSV/TSV | Full (sortable, filterable, auto-chart) | None |
-| JSONL | Functional | None |
+| JSONL | Full (transcript layout, turn-based, diff/tool rendering) | None |
 | Plain text | Functional | None |
 | JSON | Syntax highlighted via highlight.js | None |
 | YAML | Syntax highlighted via highlight.js | None |
-| Images | Web `<img>` + base64 data URI in --html | None |
+| Images | Web `<img>` via asset route, base64 data URI in --html | None |
 | Video | Web `<video>` player with speed/keyboard controls, base64 in --html (<10MB) | None |
+| Contracts | Clause-structured layout with TOC (detected via frontmatter type) | None |
 
 ### What carries forward
 
