@@ -119,6 +119,46 @@ PgDn / PgUp     Full page down / up
 q               Quit
 ```
 
+## Examples
+
+### Git diffs in the browser
+
+```bash
+# Uncommitted changes in one file
+git diff file.txt | as diff - --port 3000
+
+# Staged changes
+git diff --cached file.txt | as diff - --port 3000
+
+# All uncommitted changes (staged + unstaged)
+git diff HEAD | as diff - --port 3000
+
+# Compare branches
+git diff main..feature | as diff - --port 3000
+```
+
+### Agent transcripts
+
+```bash
+# Render a Claude Code session
+as session.jsonl --port 3000
+```
+
+### Static export
+
+```bash
+# Pipe any format to self-contained HTML
+git diff HEAD | as diff - --html > review.html
+as data.csv --html > table.html
+```
+
+### Directory index
+
+```bash
+# Serve a folder of markdown as a docs site
+as ~/notes/ --port 8080
+```
+
 ## Shell alias
 
 ```bash
