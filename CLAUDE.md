@@ -1,31 +1,124 @@
-# CLAUDE.md
+# Sloan
 
-## Project Overview
+Manifest right. The human endpoint of the Abe Protocol.
 
 Lap project: wildreason/aster
 
-**aster** - render any file as a clean web page, instantly, from the terminal. Single binary. Any content format → readable, shareable web. Started as a terminal viewer; the web renderer is the actual product.
+## Mission
 
-```bash
-aster file.md --port 3000  # Web: serve rendered HTML on localhost
-aster data.csv --port 3000 # Web: sortable/filterable table with auto-chart
-aster demo.webm --port 3000 # Web: branded video player with controls
-aster file.md --html       # Static: self-contained HTML to stdout
-aster demo.mp4 --html      # Static: self-contained HTML video page
-aster ~/dropstore/docs/ --port 8080  # Web: directory index with per-doc routes
-aster file.md              # Terminal: Markdown with colors and tables
-aster photo.png            # Terminal: Image inline (chafa)
-aster changes.diff         # Terminal: Diff with syntax highlighting
-aster data.csv             # Terminal: CSV as formatted table
-aster data.jsonl           # Terminal: JSONL transcript viewer
-aster demo.mp4             # Terminal: Video metadata (ffprobe)
-aster pick                 # Pick from recent files
-aster latest               # Open newest file in cwd
-aster -n file.md           # Show source file line numbers
-aster ~/dropstore/docs/              # Terminal: list docs with title/date/tags
+Agents produce hundreds of signals per session. Humans need five. Sloan is the filter — it classifies agent output into human-relevant primitives and renders only what matters. The rendering engine is infrastructure. The product is showing humans the right thing at the right time.
+
+```
+sloane (left / parsing)              sloan (right / rendering)
+xlsx, docx, zip, pdf                 JSON-LD manifest, agent activity
+Unstructured.io wrapper              five primitives classifier
+file -> JSON-LD manifest      ->     manifest -> HTML
+agent reads this                     human reads this
+~/wild/sloane                        ~/wild/aster (becoming ~/wild/sloan)
 ```
 
-Shell alias: `alias as=aster`
+The rendering engine (v1/v2) is complete. Do not extend it. The product is v3: agent activity rendered through five primitives.
+
+## The Five Primitives
+
+| Primitive | What human sees | Agent signal |
+|-----------|----------------|-------------|
+| **Decision** | Agent needs your input | AskUserQuestion, permission requests |
+| **Artifact** | Agent produced something | Write, create_document, rendered output |
+| **Mutation** | Agent changed something | Edit, destructive tools, git push |
+| **Threshold** | Cost/time/risk limit hit | Token counts, errors, cost |
+| **Status** | Working / done / blocked | Session start/stop, progress |
+
+Everything else is swallowed. This is the product.
+
+## Domain Taste
+
+Sloan is a rendering and classification problem, not a web app problem. The systems worth studying:
+
+**Rendering lineage:** Oberon's text system (content as structured objects, not strings). TeX's box-and-glue model (layout as constraint satisfaction). Plan 9's plumber (content-type routing without file extensions). These teach that rendering is a pipeline — typed input, structured intermediate, formatted output — not template stamping.
+
+**Classification lineage:** Unix `file(1)` (magic bytes, not extensions). Bayesian spam filters (classify by signal density, not keywords). Information retrieval's precision/recall tradeoff — the five primitives optimize for precision (show only what matters) over recall (show everything just in case).
+
+**What this means for code:** Every content type follows `Parse -> []Block -> Classify -> Render`. The `[]Block` pipeline is the architecture. New input sources (hooks, MCP traffic, streaming) enter through new parsers, not new pipelines. New output surfaces (activity feed, manifest viewer) are new renderers on the same blocks. If you're writing code that doesn't touch this pipeline, question whether it belongs here.
+
+## Abe Protocol Position
+
+**Layer:** Manifest (Team Sloane)
+**Side:** Right (rendering — human endpoint)
+**Counterpart:** sloane (left, parsing — ~/wild/sloane)
+**Contract:** JSON-LD manifest schema connects both halves
+**Spec:** ~/wild/org/spec.md, Section 3A
+
+## What's Done (engine — do not touch)
+
+- Format-agnostic pipeline: `Parse -> []Block -> Render -> HTML`
+- Content types: md, csv, diff, json, jsonl, images, video, contracts, yaml
+- Web mode: SSE live reload, syntax highlighting, sortable tables, TOC, search
+- TUI mode: terminal rendering with colors and tables
+- Static export: `--html` self-contained output
+- Directory mode: doc index with frontmatter
+
+## What to Build (product)
+
+| # | What | Why |
+|---|------|-----|
+| 1 | Activity classifier (LAP-006) | Five primitives filter — the product |
+| 2 | Hooks integration (LAP-007) | Real-time feed from Claude Code |
+| 3 | Manifest renderer | New parser: `parser_manifest.go` for JSON-LD from sloane |
+| 4 | Live streaming | `sloan --listen` for push-based agent feeds |
+
+## What NOT to Build
+
+- New file format parsers (engine is done)
+- TUI improvements (web is the output surface)
+- Directory mode features (static site generation is not the product)
+- LAP-003/004/005 — engine work, deprioritized
+- Anything that doesn't serve the five primitives
+
+## Architecture
+
+```
+Input sources:
+  Session transcripts (.jsonl)    Current: parse agent activity
+  Manifest JSON-LD from sloane    Next: render structured file manifests
+  Hooks (PostToolUse, Stop)       Planned: real-time push (LAP-007)
+  Stream-JSON pipe (claude -p)    Future: live streaming
+  MCP traffic (proxy/sidecar)     Future: intercept agent-system calls
+     |
+     v
+Parse -> []Block -> Classify (five primitives) -> Render
+     |                                              |
+     +-- Web path:  server.go -> formatBlockHTML()   |
+     +-- TUI path:  reader.go -> formatter.go       |
+     +-- Static:    RenderStaticHTMLPage             |
+     +-- Activity:  formatActivityFeedHTML() (LAP-006)
+```
+
+Block pipeline — all content types produce `[]Block` with typed payloads via `Block.Data`:
+
+| Content type | Parser | Block.Data |
+|-------------|--------|------------|
+| Markdown | MarkdownParser | - |
+| Diffs | DiffParser | - |
+| CSV/TSV | CsvParser | *CsvData |
+| JSONL | JSONLParser | *TranscriptData |
+| Images | ImageParser | *ImageData |
+| Video | VideoParser | *VideoData |
+| Contracts | ContractParser | *ContractData |
+
+`formatBlockHTML()` dispatches all content types. Add new parser: implement `Parser` interface, add to `detectParser()` in main.go.
+
+```go
+type Parser interface {
+    Parse(content string) []Block
+    Detect(filePath string) bool
+}
+
+type FileParser interface {
+    Parser
+    ParseFile(filePath string, static bool) ([]Block, error)
+}
+```
 
 ## Build
 
@@ -35,263 +128,36 @@ make test      # Run tests
 make install   # Install to ~/.local/bin
 ```
 
-## Flags
-
-- `-n` — Source file line numbers in gutter (dim gray, right-aligned)
-- `-f` — Follow mode (file watching)
-- `-t TYPE` — Force content type (md, json, jsonl, diff, txt, yaml, csv)
-- `--port N` — Serve rendered file as HTML on localhost:N with live reload
-- `--html` — Export self-contained HTML to stdout (no CDN, no server)
-
-## Architecture
-
-One unified pipeline: every content type follows `Parse -> []Block -> Render -> HTML`.
-
-```
-main.go              Args, subcommands, routing, flag parsing
-     |
-detectFileType()     Route by extension: img/vid -> FileParser, text -> Parser
-     |
-detectParser()       Auto-detect: .md .jsonl .diff .txt .json .csv + contract (frontmatter)
-     |
-parser.Parse()       Extract blocks from content (all types produce []Block)
-     |
-     +-- TUI path:   reader.go -> formatter.go (tview tags, Catppuccin dark)
-     |
-     +-- Web path:   server.go -> serveHTML() -> formatBlockHTML() (HTML/CSS/JS, brand light theme)
-     |
-     +-- Static:     formatter_html.go -> RenderStaticHTMLPage (inlined CSS/JS, no CDN)
-```
-
-### Block pipeline
-
-All content types produce `[]Block` with typed payloads via `Block.Data`:
-
-| Content type | Parser | Block.ContentType | Block.Data |
-|-------------|--------|-------------------|------------|
-| Markdown | MarkdownParser | BlockContentPlain | - |
-| Diffs | DiffParser | BlockContentDiff | - |
-| CSV/TSV | CsvParser | BlockContentCSV | *CsvData |
-| JSONL | JSONLParser | BlockContentTranscript | *TranscriptData |
-| Images | ImageParser (FileParser) | BlockContentImage | *ImageData |
-| Video | VideoParser (FileParser) | BlockContentVideo | *VideoData |
-| Contracts | ContractParser | BlockContentContract | *ContractData |
-| JSON | TxtParser | BlockContentJSON | - |
-| YAML | TxtParser | BlockContentYAML | - |
-
-`formatBlockHTML()` dispatches all content types. `serveHTML()` is the only server function (plus `serveDirectory` for collections). Binary content (images, video) uses `/asset/{filename}` routes registered by `serveHTML`.
-
-### Web mode (`--port`)
-
-- Single block rendering: markdown files render as one continuous document (headings stay as native h1/h2/h3)
-- SSE live reload: file watcher polls every 500ms, pushes reload event to all connected browsers
-- No external dependencies at runtime (highlight.js + fonts loaded from CDN)
-- Frontmatter: `---` delimited YAML stripped from content, `title` used in `<title>` tag
-
-### Directory mode (`aster <dir> --port`)
-
-- Scans `*.md` files, parses frontmatter from each
-- Index page at `/` lists all docs sorted by created date desc
-- Individual docs served at `/{slug}` (slug = filename without .md)
-- `docCache` holds pre-rendered HTML per slug, updated by directory watcher
-- SSE live reload: detects new/modified/deleted files, refreshes index + docs
-- Terminal fallback: `aster <dir>` prints formatted table to stdout
-
-### Web features
-
-| Feature | Implementation |
-|---------|---------------|
-| Syntax highlighting | highlight.js CDN, `github` light theme, auto-language detection |
-| Copy button | Appears on code block hover, copies to clipboard |
-| Sortable tables | Click header to sort asc/desc, numeric-aware |
-| Links | Open in new tab, external icon, URL tooltip on hover |
-| Images | `![alt](url)` renders as `<img>`, click to expand |
-| TOC sidebar | Fixed left nav from h1/h2/h3, scroll-spy, collapsible |
-| Diffs | Side-by-side two-column, collapsible hunks, word-level LCS highlighting |
-| Search | `/` or `Ctrl+K` opens fuzzy search overlay with arrow key navigation |
-| CSV tables | Per-column filter inputs, row count, numeric right-alignment |
-| Auto-chart | SVG line chart when CSV has label + numeric columns (brand colors) |
-| Video player | `<video controls>`, speed buttons (0.5x/1x/1.5x/2x), keyboard shortcuts (Space/F/arrows) |
-
-### Brand theme
-
-- Fonts: Inter 400/600 (body), JetBrains Mono 400/600 (code)
-- Colors: Navy #0A1628, Slate #1E293B, Accent Blue #3B82F6, Surface #F8FAFC, White #FFFFFF, Border #E2E8F0
-- Type scale: H1 30px, H2 24px, H3 20px, Body 16px, Small 14px, Caption 12px
-- Rules: Semibold for headings (no italic), Accent Blue for interactive elements only
-
-## Files
-
-| File | Purpose |
-|------|---------|
-| `main.go` | Entry, subcommand routing, auto-detect, flag parsing |
-| `data_types.go` | Typed Block payloads: ImageData, VideoData, CsvData, TranscriptData, ContractData |
-| `viewer_img.go` | TUI image rendering (chafa/imgcat, iterm/kitty/symbols) |
-| `viewer_video.go` | TUI video rendering (ffprobe metadata, ffplay playback) |
-| `parser.go` | Parser/FileParser interfaces, Block struct, BlockIndex |
-| `parser_image.go` | ImageParser (FileParser for images, base64/asset modes) |
-| `parser_video.go` | VideoParser (FileParser for video, base64/asset modes) |
-| `parser_contract.go` | ContractParser (contracts detected via frontmatter type) |
-| `parser_jsonl.go` | JSONLParser (transcripts) |
-| `parser_diff.go` | DiffParser (unified diffs) |
-| `parser_txt.go` | TxtParser (plain text) |
-| `parser_csv.go` | CsvParser (CSV/TSV with auto-delimiter detection) |
-| `parser_todo.go` | TodoParser (JSON todos) |
-| `reader.go` | Scrollable TUI viewer |
-| `follower.go` | Follow mode (-f), file watching |
-| `formatter.go` | TUI block rendering, markdown, tables, line number gutter |
-| `formatter_diff.go` | TUI diff coloring (ANSI) |
-| `formatter_html.go` | Web rendering: HTML/CSS/JS, brand theme, all web features, index page |
-| `formatter_contract.go` | Contract clause parsing and HTML helpers |
-| `formatter_shell.go` | Shell output styling |
-| `frontmatter.go` | YAML frontmatter parser (title, created, tags) |
-| `frontmatter_test.go` | Frontmatter parsing tests |
-| `server.go` | HTTP server (serveHTML + serveDirectory), SSE broadcaster, file watcher |
-| `content_type.go` | Block content type constants and detection |
-| `commands.go` | Navigator, command parsing |
-| `recent.go` | Recent file history (pick/latest) |
-| `context_git.go` | Git context for diffs |
-| `keybindings.go` | Key action parsing |
-| `embed.go` | go:embed declarations for highlight.js assets |
-| `embed/` | highlight.min.js + github.min.css for static HTML export |
+Shell alias: `alias as=aster`
 
 ## Commands
 
 ```
-aster <file>        View file (auto-detect format)
-aster <dir>         List directory docs (table to stdout)
-aster <dir> --port  Serve directory as web index with doc routes
-aster pick | p      Pick from recent files
-aster latest | l    Open newest file in cwd
-aster help          Show help
+aster <file>          View file (auto-detect format)
+aster <file> --port N Serve as HTML on localhost:N
+aster <file> --html   Static self-contained HTML to stdout
+aster <dir> --port N  Serve directory as web index
+aster session.jsonl   Render agent transcript as activity feed
+aster pick | p        Pick from recent files
+aster latest | l      Open newest file in cwd
 ```
 
-Type subcommands (hidden, scoped shortcuts):
-```
-aster md <file|-|+>     Markdown
-aster img <file|-|+>    Images
-aster txt <file|-|+>    Plain text
-aster diff <file|-|+>   Diffs
-aster json <file|-|+>   JSON
-aster csv <file|-|+>    CSV/TSV
-aster jsonl <file|-|+>  Transcripts
-aster vid <file|-|+>    Video
-```
+## Brand
 
-## Navigation (TUI)
-
-- `j/k` - scroll down/up (3 lines)
-- `d/u` - half page down/up
-- `g/G` - top/bottom
-- `PgDn/PgUp` - full page
-- `q` - quit
-
-## Navigation (Web)
-
-- `/` or `Ctrl+K` - search
-- `Esc` - close search
-- Arrow keys - navigate search results
-- TOC sidebar - click to jump to section
-
-## Parser Interface
-
-```go
-type Parser interface {
-    Parse(content string) []Block
-    Detect(filePath string) bool
-}
-
-// For binary content (images, video)
-type FileParser interface {
-    Parser
-    ParseFile(filePath string, static bool) ([]Block, error)
-}
-```
-
-Add new text parser: create `parser_xxx.go`, implement `Parser`, add to `detectParser()` in main.go.
-Add new binary parser: create `parser_xxx.go`, implement `FileParser`, add dispatch in `viewFile()`.
-
-Typed payloads go in `Block.Data` (defined in `data_types.go`). The `formatBlockHTML()` switch in `formatter_html.go` dispatches rendering by `Block.ContentType`.
+- Fonts: Inter 400/600 (body), JetBrains Mono 400/600 (code)
+- Colors: Navy #0A1628, Slate #1E293B, Accent Blue #3B82F6, Surface #F8FAFC
+- Semibold for headings (no italic), Accent Blue for interactive only
 
 ## Release
-
-goreleaser builds cross-platform binaries on tag push.
 
 ```bash
 git tag v1.0.1
 git push origin v1.0.1
-# GitHub Actions runs goreleaser -> GitHub Release + Homebrew tap
+# GitHub Actions -> goreleaser -> GitHub Release + Homebrew tap
 ```
 
-## Frontmatter
+## Evolution
 
-Files with YAML frontmatter between `---` delimiters are parsed automatically:
-
-```yaml
----
-title: Document Title
-created: 2026-02-23
-tags: [feature, docs]
----
-```
-
-- `ParseFrontmatter(content) -> (Frontmatter, body)` in `frontmatter.go`
-- Web mode: title used in `<title>` tag, frontmatter stripped from rendered content
-- TUI mode: frontmatter shows as-is (not stripped)
-- Directory mode: title/created/tags populate the index listing
-
-## v2: wedoc
-
-v1 was the terminal file viewer. v2 is the core product: render any content as a clean web page, instantly, from the terminal. Same binary, no new project.
-
-```bash
-aster file.md --port 3000          # Serve rendered HTML (v1, done)
-aster file.md --html > page.html   # Static export, self-contained
-aster file.md --share              # Public URL via tunnel, expires on exit
-aster file.md --deploy             # Push to hosting, permanent URL
-```
-
-### Phases
-
-| Phase | Feature | Status |
-|-------|---------|--------|
-| 1 | Content parity | Done. JSON/YAML syntax highlighting, images, CSV/TSV tables with auto-chart. |
-| 2 | Static export (`--html`) | Done. Self-contained HTML with inlined highlight.js CSS/JS. Works offline. |
-| 3 | Public sharing (`--share`) | Planned. Public URL via tunnel (cloudflare/bore). Auto-expires on exit. |
-| 4 | Deploy (`--deploy`) | Planned. Push static HTML to hosting (Vercel/CF Pages). Permanent URL. |
-
-### Web rendering status
-
-All content types go through the unified pipeline: `Parser -> []Block -> formatBlockHTML() -> HTML`.
-
-| Content | Web | Gap |
-|---------|-----|-----|
-| Markdown | Full (TOC, search, tables, syntax highlighting, diffs) | None |
-| Diffs | Full (side-by-side, word-level, collapsible) | None |
-| CSV/TSV | Full (sortable, filterable, auto-chart) | None |
-| JSONL | Full (transcript layout, turn-based, diff/tool rendering) | None |
-| Plain text | Functional | None |
-| JSON | Syntax highlighted via highlight.js | None |
-| YAML | Syntax highlighted via highlight.js | None |
-| Images | Web `<img>` via asset route, base64 data URI in --html | None |
-| Video | Web `<video>` player with speed/keyboard controls, base64 in --html (<10MB) | None |
-| Contracts | Clause-structured layout with TOC (detected via frontmatter type) | None |
-
-### What carries forward
-
-Everything from v1: TUI viewer, `formatter_html.go` renderer, SSE + file watcher, directory mode, frontmatter parser, stdin piping.
-
-### What dies
-
-SuperDoc integration, .docx editing, CRUD API, collaboration, dashboard shell, `asdoc` clipboard tool.
-
-## Scope boundary
-
-Aster is a **viewer**: file in -> rendered output. No state, no write-back, no persistent interaction.
-
-| In scope | Out of scope |
-|----------|-------------|
-| Parse + render | Parse + render + interact + persist |
-| Read-only display | Read-write workflows |
-| Stateless | Stateful (localStorage, databases) |
-| Navigation (scroll, search, TOC) | User
+v1: File -> terminal (done)
+v2: File -> web (done)
+v3: Agent activity -> web (the product)
