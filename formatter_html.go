@@ -19,11 +19,6 @@ func RenderHTMLPage(title string, blocks []Block, showLineNums bool) string {
 	sb.WriteString("<meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\">\n")
 	sb.WriteString(fmt.Sprintf("<title>%s</title>\n", html.EscapeString(title)))
 
-	// Google Fonts: Inter (body) + JetBrains Mono (code)
-	sb.WriteString("<link rel=\"preconnect\" href=\"https://fonts.googleapis.com\">\n")
-	sb.WriteString("<link rel=\"preconnect\" href=\"https://fonts.gstatic.com\" crossorigin>\n")
-	sb.WriteString("<link rel=\"stylesheet\" href=\"https://fonts.googleapis.com/css2?family=Inter:wght@400;600&family=JetBrains+Mono:wght@400;600&display=swap\">\n")
-
 	// highlight.js CDN for syntax highlighting (light theme)
 	sb.WriteString("<link rel=\"stylesheet\" href=\"https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github.min.css\">\n")
 	sb.WriteString("<script src=\"https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js\"></script>\n")
@@ -60,7 +55,7 @@ func RenderHTMLPage(title string, blocks []Block, showLineNums bool) string {
 		// TOC sidebar
 		if len(headers) > 1 {
 			sb.WriteString("<nav id=\"toc\" class=\"toc\">\n")
-			sb.WriteString("<div class=\"toc-toggle\" onclick=\"document.getElementById('toc').classList.toggle('collapsed')\" title=\"Toggle TOC\">&#9776;</div>\n")
+			sb.WriteString("<div class=\"toc-toggle\" onclick=\"document.getElementById('toc').classList.toggle('collapsed')\" title=\"Toggle TOC\"><svg class=\"toc-icon\" width=\"16\" height=\"16\" viewBox=\"0 0 16 16\" fill=\"none\"><line x1=\"1\" y1=\"3\" x2=\"15\" y2=\"3\" stroke=\"currentColor\" stroke-width=\"1.5\" stroke-linecap=\"round\"/><line x1=\"1\" y1=\"8\" x2=\"11\" y2=\"8\" stroke=\"currentColor\" stroke-width=\"1.5\" stroke-linecap=\"round\"/><line x1=\"1\" y1=\"13\" x2=\"13\" y2=\"13\" stroke=\"currentColor\" stroke-width=\"1.5\" stroke-linecap=\"round\"/></svg><span class=\"toc-label\">Contents</span></div>\n")
 			sb.WriteString("<div class=\"toc-content\">\n")
 			sb.WriteString(fmt.Sprintf("<div class=\"toc-title\">%s</div>\n", html.EscapeString(title)))
 			for _, h := range headers {
@@ -120,9 +115,6 @@ func RenderIndexPage(dirName string, docs []DocMeta) string {
 	sb.WriteString("<meta charset=\"UTF-8\">\n")
 	sb.WriteString("<meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\">\n")
 	sb.WriteString(fmt.Sprintf("<title>%s</title>\n", html.EscapeString(dirName)))
-	sb.WriteString("<link rel=\"preconnect\" href=\"https://fonts.googleapis.com\">\n")
-	sb.WriteString("<link rel=\"preconnect\" href=\"https://fonts.gstatic.com\" crossorigin>\n")
-	sb.WriteString("<link rel=\"stylesheet\" href=\"https://fonts.googleapis.com/css2?family=Inter:wght@400;600&family=JetBrains+Mono:wght@400;600&display=swap\">\n")
 	sb.WriteString("<style>\n")
 	sb.WriteString(indexCSS())
 	sb.WriteString("</style>\n")
@@ -166,17 +158,17 @@ func RenderIndexPage(dirName string, docs []DocMeta) string {
 	return sb.String()
 }
 
-// indexCSS returns CSS for the index page using the brand theme
+// indexCSS returns CSS for the index page
 func indexCSS() string {
 	return `
 * { margin: 0; padding: 0; box-sizing: border-box; }
 body {
-  background: #FFFFFF;
-  color: #0A1628;
-  font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+  background: #fff;
+  color: #1d1d1f;
+  font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'SF Pro Display', 'Helvetica Neue', Helvetica, Arial, sans-serif;
   font-weight: 400;
-  font-size: 16px;
-  line-height: 1.7;
+  font-size: 17px;
+  line-height: 1.47059;
   -webkit-font-smoothing: antialiased;
 }
 .index-container {
@@ -185,18 +177,19 @@ body {
   padding: 3rem 1.5rem;
 }
 .index-title {
-  color: #0A1628;
-  font-size: 30px;
-  font-weight: 600;
+  color: #1d1d1f;
+  font-size: 40px;
+  font-weight: 700;
+  letter-spacing: -0.005em;
   margin-bottom: 0.25rem;
 }
 .index-count {
-  color: #64748B;
+  color: #6e6e73;
   font-size: 14px;
   margin-bottom: 2rem;
 }
 .index-empty {
-  color: #64748B;
+  color: #6e6e73;
   font-size: 14px;
 }
 .index-table {
@@ -207,35 +200,35 @@ body {
 .index-table th {
   text-align: left;
   padding: 0.5rem 0.75rem;
-  color: #64748B;
+  color: #6e6e73;
   font-size: 12px;
   font-weight: 600;
   text-transform: uppercase;
   letter-spacing: 0.05em;
-  border-bottom: 2px solid #E2E8F0;
+  border-bottom: 2px solid #d2d2d7;
 }
 .index-table td {
   padding: 0.6rem 0.75rem;
-  border-bottom: 1px solid #F1F5F9;
+  border-bottom: 1px solid #e8e8ed;
   vertical-align: top;
 }
-.index-table tr:hover td { background: #F8FAFC; }
+.index-table tr:hover td { background: #f5f5f7; }
 .index-table a {
-  color: #0A1628;
+  color: #1d1d1f;
   text-decoration: none;
   font-weight: 600;
 }
-.index-table a:hover { color: #3B82F6; }
+.index-table a:hover { color: #06c; }
 .date-col {
-  color: #64748B;
-  font-family: 'JetBrains Mono', monospace;
+  color: #6e6e73;
+  font-family: 'SF Mono', SFMono-Regular, ui-monospace, Menlo, monospace;
   font-size: 13px;
   white-space: nowrap;
 }
 .tag {
   display: inline-block;
-  background: #F1F5F9;
-  color: #334155;
+  background: #e8e8ed;
+  color: #1d1d1f;
   padding: 0.1rem 0.45rem;
   border-radius: 3px;
   font-size: 12px;
@@ -290,7 +283,7 @@ func headerID(text string) string {
 // isTranscriptContent checks if any block is a transcript
 func isTranscriptContent(blocks []Block) bool {
 	for _, b := range blocks {
-		if b.ContentType == BlockContentTranscript || b.SourceType == SourceChat {
+		if b.ContentType == BlockContentTranscript {
 			return true
 		}
 	}
@@ -310,12 +303,9 @@ func formatTranscriptBlockHTML(block *Block) string {
 	sb.WriteString("<div class=\"turn\">\n")
 	sb.WriteString(fmt.Sprintf("<div class=\"turn-gutter\">%s</div>\n", html.EscapeString(turnLabel)))
 
-	// Prefer typed Data, fall back to legacy TurnParts
 	var parts []TurnPart
 	if tData, ok := block.Data.(*TranscriptData); ok {
 		parts = tData.TurnParts
-	} else {
-		parts = block.TurnParts
 	}
 
 	for _, part := range parts {
@@ -364,7 +354,7 @@ func formatTranscriptBlockHTML(block *Block) string {
 // When singleBlock is true, the block header bar is hidden (headings are in the content)
 func formatBlockHTML(block *Block, showLineNums bool, singleBlock bool) string {
 	// Transcript blocks use dedicated renderer
-	if block.ContentType == BlockContentTranscript || (block.SourceType == SourceChat && len(block.TurnParts) > 0) {
+	if block.ContentType == BlockContentTranscript {
 		return formatTranscriptBlockHTML(block)
 	}
 
@@ -436,9 +426,9 @@ func formatImageBlockHTML(block *Block) string {
 		src = "/asset/" + html.EscapeString(filepath.Base(imgData.Alt))
 	}
 
-	sb.WriteString(fmt.Sprintf("<div class=\"title\" style=\"text-align:center;font-size:14px;font-weight:600;color:#64748B;margin-bottom:1.5rem\">%s</div>\n", html.EscapeString(imgData.Alt)))
+	sb.WriteString(fmt.Sprintf("<div class=\"title\" style=\"text-align:center;font-size:14px;font-weight:600;color:#6e6e73;margin-bottom:1.5rem\">%s</div>\n", html.EscapeString(imgData.Alt)))
 	sb.WriteString("<div class=\"img-container\" style=\"text-align:center\">\n")
-	sb.WriteString(fmt.Sprintf("  <img src=\"%s\" alt=\"%s\" style=\"max-width:100%%;max-height:85vh;border-radius:6px;border:1px solid #E2E8F0;cursor:pointer\" onclick=\"this.classList.toggle('expanded')\">\n",
+	sb.WriteString(fmt.Sprintf("  <img src=\"%s\" alt=\"%s\" style=\"max-width:100%%;max-height:85vh;border-radius:6px;border:1px solid #d2d2d7;cursor:pointer\" onclick=\"this.classList.toggle('expanded')\">\n",
 		src, html.EscapeString(imgData.Alt)))
 	sb.WriteString("</div>\n")
 	sb.WriteString("</div>\n")
@@ -463,24 +453,24 @@ func formatVideoBlockHTML(block *Block) string {
 	mime := html.EscapeString(vidData.MIME)
 
 	sb.WriteString("<div class=\"content video-content\" style=\"display:flex;flex-direction:column;align-items:center\">\n")
-	sb.WriteString(fmt.Sprintf("<div class=\"title\" style=\"font-size:14px;font-weight:600;color:#64748B;margin-bottom:1.5rem\">%s</div>\n", title))
+	sb.WriteString(fmt.Sprintf("<div class=\"title\" style=\"font-size:14px;font-weight:600;color:#6e6e73;margin-bottom:1.5rem\">%s</div>\n", title))
 	sb.WriteString("<div class=\"video-container\" style=\"max-width:960px;width:100%%\">\n")
-	sb.WriteString(fmt.Sprintf("  <video id=\"player\" controls style=\"width:100%%;border-radius:6px;border:1px solid #E2E8F0;background:#0A1628;outline:none\">\n    <source src=\"%s\" type=\"%s\">\n  </video>\n", src, mime))
+	sb.WriteString(fmt.Sprintf("  <video id=\"player\" controls style=\"width:100%%;border-radius:6px;border:1px solid #d2d2d7;background:#1d1d1f;outline:none\">\n    <source src=\"%s\" type=\"%s\">\n  </video>\n", src, mime))
 
 	// Speed controls
-	sb.WriteString(`  <div class="controls" style="display:flex;align-items:center;gap:0.75rem;margin-top:0.75rem;font-size:13px;color:#64748B;font-family:'JetBrains Mono',monospace">
+	sb.WriteString(`  <div class="controls" style="display:flex;align-items:center;gap:0.75rem;margin-top:0.75rem;font-size:13px;color:#6e6e73;font-family:'SF Mono',SFMono-Regular,ui-monospace,Menlo,monospace">
     <span id="time-display">0:00 / 0:00</span>
     <span style="flex:1"></span>
-    <button class="speed-btn" data-speed="0.5" style="background:#F8FAFC;border:1px solid #E2E8F0;border-radius:4px;padding:0.2rem 0.5rem;font-size:12px;font-family:'JetBrains Mono',monospace;color:#64748B;cursor:pointer">0.5x</button>
-    <button class="speed-btn active" data-speed="1" style="background:#3B82F6;border:1px solid #3B82F6;border-radius:4px;padding:0.2rem 0.5rem;font-size:12px;font-family:'JetBrains Mono',monospace;color:#FFFFFF;cursor:pointer">1x</button>
-    <button class="speed-btn" data-speed="1.5" style="background:#F8FAFC;border:1px solid #E2E8F0;border-radius:4px;padding:0.2rem 0.5rem;font-size:12px;font-family:'JetBrains Mono',monospace;color:#64748B;cursor:pointer">1.5x</button>
-    <button class="speed-btn" data-speed="2" style="background:#F8FAFC;border:1px solid #E2E8F0;border-radius:4px;padding:0.2rem 0.5rem;font-size:12px;font-family:'JetBrains Mono',monospace;color:#64748B;cursor:pointer">2x</button>
+    <button class="speed-btn" data-speed="0.5" style="background:#f5f5f7;border:1px solid #d2d2d7;border-radius:4px;padding:0.2rem 0.5rem;font-size:12px;font-family:'SF Mono',SFMono-Regular,ui-monospace,Menlo,monospace;color:#6e6e73;cursor:pointer">0.5x</button>
+    <button class="speed-btn active" data-speed="1" style="background:#06c;border:1px solid #06c;border-radius:4px;padding:0.2rem 0.5rem;font-size:12px;font-family:'SF Mono',SFMono-Regular,ui-monospace,Menlo,monospace;color:#fff;cursor:pointer">1x</button>
+    <button class="speed-btn" data-speed="1.5" style="background:#f5f5f7;border:1px solid #d2d2d7;border-radius:4px;padding:0.2rem 0.5rem;font-size:12px;font-family:'SF Mono',SFMono-Regular,ui-monospace,Menlo,monospace;color:#6e6e73;cursor:pointer">1.5x</button>
+    <button class="speed-btn" data-speed="2" style="background:#f5f5f7;border:1px solid #d2d2d7;border-radius:4px;padding:0.2rem 0.5rem;font-size:12px;font-family:'SF Mono',SFMono-Regular,ui-monospace,Menlo,monospace;color:#6e6e73;cursor:pointer">2x</button>
   </div>
-  <div style="margin-top:1rem;font-size:12px;color:#94A3B8">
-    <kbd style="background:#F8FAFC;border:1px solid #E2E8F0;border-radius:3px;padding:0.1rem 0.35rem;font-family:'JetBrains Mono',monospace;font-size:11px">Space</kbd> play/pause
-    <kbd style="background:#F8FAFC;border:1px solid #E2E8F0;border-radius:3px;padding:0.1rem 0.35rem;font-family:'JetBrains Mono',monospace;font-size:11px">F</kbd> fullscreen
-    <kbd style="background:#F8FAFC;border:1px solid #E2E8F0;border-radius:3px;padding:0.1rem 0.35rem;font-family:'JetBrains Mono',monospace;font-size:11px">&#x2190;</kbd> -5s
-    <kbd style="background:#F8FAFC;border:1px solid #E2E8F0;border-radius:3px;padding:0.1rem 0.35rem;font-family:'JetBrains Mono',monospace;font-size:11px">&#x2192;</kbd> +5s
+  <div style="margin-top:1rem;font-size:12px;color:#86868b">
+    <kbd style="background:#f5f5f7;border:1px solid #d2d2d7;border-radius:3px;padding:0.1rem 0.35rem;font-family:'SF Mono',SFMono-Regular,ui-monospace,Menlo,monospace;font-size:11px">Space</kbd> play/pause
+    <kbd style="background:#f5f5f7;border:1px solid #d2d2d7;border-radius:3px;padding:0.1rem 0.35rem;font-family:'SF Mono',SFMono-Regular,ui-monospace,Menlo,monospace;font-size:11px">F</kbd> fullscreen
+    <kbd style="background:#f5f5f7;border:1px solid #d2d2d7;border-radius:3px;padding:0.1rem 0.35rem;font-family:'SF Mono',SFMono-Regular,ui-monospace,Menlo,monospace;font-size:11px">&#x2190;</kbd> -5s
+    <kbd style="background:#f5f5f7;border:1px solid #d2d2d7;border-radius:3px;padding:0.1rem 0.35rem;font-family:'SF Mono',SFMono-Regular,ui-monospace,Menlo,monospace;font-size:11px">&#x2192;</kbd> +5s
   </div>
 `)
 	sb.WriteString("</div>\n")
@@ -498,12 +488,12 @@ func formatContractBlockHTML(block *Block) string {
 	var sb strings.Builder
 
 	// Contract header
-	sb.WriteString("<div class=\"contract-header\" style=\"margin-bottom:2rem;padding-bottom:1rem;border-bottom:1px solid #E2E8F0\">\n")
+	sb.WriteString("<div class=\"contract-header\" style=\"margin-bottom:2rem;padding-bottom:1rem;border-bottom:1px solid #d2d2d7\">\n")
 	if cData.Parties != "" {
-		sb.WriteString(fmt.Sprintf("<div style=\"font-size:13px;color:#64748B;font-weight:600;text-transform:uppercase;letter-spacing:0.03em\">%s</div>\n", html.EscapeString(cData.Parties)))
+		sb.WriteString(fmt.Sprintf("<div style=\"font-size:13px;color:#6e6e73;font-weight:600;text-transform:uppercase;letter-spacing:0.03em\">%s</div>\n", html.EscapeString(cData.Parties)))
 	}
 	if cData.Effective != "" {
-		sb.WriteString(fmt.Sprintf("<div style=\"font-size:13px;color:#94A3B8;margin-top:0.25rem\">Effective %s</div>\n", html.EscapeString(cData.Effective)))
+		sb.WriteString(fmt.Sprintf("<div style=\"font-size:13px;color:#86868b;margin-top:0.25rem\">Effective %s</div>\n", html.EscapeString(cData.Effective)))
 	}
 	sb.WriteString("</div>\n")
 
@@ -530,7 +520,7 @@ func formatContractBlockHTML(block *Block) string {
 		if clause.Level == 2 {
 			tag = "h3"
 		}
-		sb.WriteString(fmt.Sprintf("<%s style=\"font-size:20px;font-weight:600;color:#0A1628;margin-bottom:0.75rem\"><span style=\"font-family:'JetBrains Mono',monospace;font-size:0.85em;color:#64748B\">%s.</span> %s</%s>\n",
+		sb.WriteString(fmt.Sprintf("<%s style=\"font-size:20px;font-weight:600;color:#1d1d1f;margin-bottom:0.75rem\"><span style=\"font-family:'SF Mono',SFMono-Regular,ui-monospace,Menlo,monospace;font-size:0.85em;color:#6e6e73\">%s.</span> %s</%s>\n",
 			tag, html.EscapeString(clause.ID), html.EscapeString(clause.Title), tag))
 
 		sb.WriteString("<div class=\"clause-body\">\n")
@@ -548,7 +538,7 @@ func formatCodeBlockHTML(content string, lang string) string {
 	var sb strings.Builder
 	sb.WriteString("<div class=\"content\">\n")
 	sb.WriteString(fmt.Sprintf("<div class=\"code-block\"><span class=\"code-lang\">%s</span>", html.EscapeString(lang)))
-	sb.WriteString("<button class=\"copy-btn\" onclick=\"copyCode(this)\" title=\"Copy\">&#x2398;</button>")
+	sb.WriteString("<button class=\"copy-btn\" onclick=\"copyCode(this)\" title=\"Copy\">Copy</button>")
 	sb.WriteString(fmt.Sprintf("<pre><code class=\"language-%s\">", html.EscapeString(lang)))
 	sb.WriteString(html.EscapeString(content))
 	sb.WriteString("</code></pre></div>\n")
@@ -558,12 +548,9 @@ func formatCodeBlockHTML(content string, lang string) string {
 
 // formatCsvHTML renders CSV data as an interactive table with filtering and optional chart
 func formatCsvHTML(block *Block) string {
-	// Prefer typed Data, fall back to legacy CsvRecords
 	var records [][]string
 	if csvData, ok := block.Data.(*CsvData); ok {
 		records = csvData.Records
-	} else {
-		records = block.CsvRecords
 	}
 	if len(records) < 1 {
 		return "<div class=\"content\"><p>Empty CSV</p></div>\n"
@@ -761,7 +748,7 @@ func csvAutoChart(headers []string, rows [][]string) string {
 	chartW := svgW - padL - padR
 	chartH := svgH - padT - padB
 
-	colors := []string{"#3B82F6", "#1E293B"}
+	colors := []string{"#06c", "#1d1d1f"}
 
 	var sb strings.Builder
 	sb.WriteString(fmt.Sprintf("<svg viewBox=\"0 0 %d %d\" class=\"csv-svg\">\n", svgW, svgH))
@@ -771,14 +758,14 @@ func csvAutoChart(headers []string, rows [][]string) string {
 	for i := 0; i <= gridSteps; i++ {
 		y := padT + chartH - (i*chartH)/gridSteps
 		val := minVal + (float64(i)/float64(gridSteps))*valRange
-		sb.WriteString(fmt.Sprintf("<line x1=\"%d\" y1=\"%d\" x2=\"%d\" y2=\"%d\" stroke=\"#E2E8F0\" stroke-width=\"1\"/>\n",
+		sb.WriteString(fmt.Sprintf("<line x1=\"%d\" y1=\"%d\" x2=\"%d\" y2=\"%d\" stroke=\"#d2d2d7\" stroke-width=\"1\"/>\n",
 			padL, y, padL+chartW, y))
-		sb.WriteString(fmt.Sprintf("<text x=\"%d\" y=\"%d\" text-anchor=\"end\" fill=\"#64748B\" font-size=\"11\" font-family=\"-apple-system,sans-serif\">%.0f</text>\n",
+		sb.WriteString(fmt.Sprintf("<text x=\"%d\" y=\"%d\" text-anchor=\"end\" fill=\"#6e6e73\" font-size=\"11\" font-family=\"-apple-system,sans-serif\">%.0f</text>\n",
 			padL-8, y+4, val))
 	}
 
 	// Axes
-	sb.WriteString(fmt.Sprintf("<line x1=\"%d\" y1=\"%d\" x2=\"%d\" y2=\"%d\" stroke=\"#E2E8F0\" stroke-width=\"1\"/>\n",
+	sb.WriteString(fmt.Sprintf("<line x1=\"%d\" y1=\"%d\" x2=\"%d\" y2=\"%d\" stroke=\"#d2d2d7\" stroke-width=\"1\"/>\n",
 		padL, padT+chartH, padL+chartW, padT+chartH))
 
 	// Plot each series
@@ -817,7 +804,7 @@ func csvAutoChart(headers []string, rows [][]string) string {
 		if len(label) > 12 {
 			label = label[:12]
 		}
-		sb.WriteString(fmt.Sprintf("<text x=\"%d\" y=\"%d\" text-anchor=\"middle\" fill=\"#64748B\" font-size=\"11\" font-family=\"-apple-system,sans-serif\" transform=\"rotate(-45 %d %d)\">%s</text>\n",
+		sb.WriteString(fmt.Sprintf("<text x=\"%d\" y=\"%d\" text-anchor=\"middle\" fill=\"#6e6e73\" font-size=\"11\" font-family=\"-apple-system,sans-serif\" transform=\"rotate(-45 %d %d)\">%s</text>\n",
 			x, padT+chartH+16, x, padT+chartH+16, html.EscapeString(label)))
 	}
 
@@ -827,7 +814,7 @@ func csvAutoChart(headers []string, rows [][]string) string {
 		lx := padL + si*120
 		sb.WriteString(fmt.Sprintf("<rect x=\"%d\" y=\"%d\" width=\"12\" height=\"12\" fill=\"%s\" rx=\"2\"/>\n",
 			lx, svgH-16, color))
-		sb.WriteString(fmt.Sprintf("<text x=\"%d\" y=\"%d\" fill=\"#0A1628\" font-size=\"12\" font-family=\"-apple-system,sans-serif\">%s</text>\n",
+		sb.WriteString(fmt.Sprintf("<text x=\"%d\" y=\"%d\" fill=\"#1d1d1f\" font-size=\"12\" font-family=\"-apple-system,sans-serif\">%s</text>\n",
 			lx+16, svgH-5, html.EscapeString(headers[col])))
 	}
 
@@ -902,7 +889,7 @@ func formatMarkdownHTML(text string, block *Block, pageNum int, showLineNums boo
 				if codeLang != "" {
 					langLabel = fmt.Sprintf("<span class=\"code-lang\">%s</span>", html.EscapeString(codeLang))
 				}
-				sb.WriteString(fmt.Sprintf("<div class=\"code-block\">%s<button class=\"copy-btn\" onclick=\"copyCode(this)\" title=\"Copy\">&#x2398;</button><pre><code%s>", langLabel, langClass))
+				sb.WriteString(fmt.Sprintf("<div class=\"code-block\">%s<button class=\"copy-btn\" onclick=\"copyCode(this)\" title=\"Copy\">Copy</button><pre><code%s>", langLabel, langClass))
 				for _, cl := range codeLines {
 					sb.WriteString(html.EscapeString(cl))
 					sb.WriteString("\n")
@@ -1291,23 +1278,23 @@ func searchOverlayHTML() string {
 `
 }
 
-// cssStyles returns the brand-themed light CSS
-// Palette: Navy #0A1628, Slate #1E293B, Accent Blue #3B82F6,
-//          Surface #F8FAFC, White #FFFFFF, Border #E2E8F0,
-//          Text Secondary #64748B, Medium Blue #334155, Accent Light #DBEAFE
-// Type: Inter 400/600 (body), JetBrains Mono 400/600 (code)
-// Scale: H1 30px, H2 24px, H3 20px, Body 16px, Small 14px, Caption 12px
+// cssStyles returns the minimal Apple-style CSS
+// Palette: Text #1d1d1f, Secondary #6e6e73, Tertiary #86868b,
+//          Surface #f5f5f7, White #fff, Border #d2d2d7, Light border #e8e8ed,
+//          Link #06c, Highlight #ffd60a
+// Type: System font stack (body), SF Mono (code)
+// Scale: H1 40px, H2 32px, H3 24px, Body 17px, Small 14px, Caption 12px
 func cssStyles() string {
 	return `
 * { margin: 0; padding: 0; box-sizing: border-box; }
 
 body {
-  background: #FFFFFF;
-  color: #0A1628;
-  font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+  background: #fff;
+  color: #1d1d1f;
+  font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'SF Pro Display', 'Helvetica Neue', Helvetica, Arial, sans-serif;
   font-weight: 400;
-  font-size: 16px;
-  line-height: 1.7;
+  font-size: 17px;
+  line-height: 1.47059;
   -webkit-font-smoothing: antialiased;
 }
 
@@ -1318,9 +1305,11 @@ body {
   padding: 3rem 1.5rem;
 }
 .container.has-toc {
-  margin-left: 260px;
   max-width: 740px;
   padding: 3rem 2rem;
+  margin: 0 auto;
+  transform: translateX(140px);
+  transition: transform 0.2s;
 }
 
 /* --- TOC sidebar --- */
@@ -1328,82 +1317,85 @@ body {
   position: fixed;
   top: 0;
   left: 0;
-  width: 240px;
+  width: 280px;
   height: 100vh;
-  background: #FFFFFF;
-  border-right: 1px solid #E2E8F0;
+  background: #fff;
+  border-right: none;
   overflow-y: auto;
-  padding: 1.5rem 0;
+  padding: 2.5rem 0;
   z-index: 100;
   transition: transform 0.2s;
 }
 .toc.collapsed .toc-content { display: none; }
 .toc.collapsed { width: 40px; }
-.toc.collapsed ~ main.has-toc { margin-left: 40px; }
+.toc.collapsed ~ main.has-toc { transform: none; }
 
 .toc-toggle {
-  padding: 0.3rem 0.8rem;
+  padding: 0.5rem 1.5rem 1.25rem;
   cursor: pointer;
-  color: #64748B;
-  font-size: 16px;
+  color: #1d1d1f;
+  font-size: 15px;
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
 }
-.toc-toggle:hover { color: #0A1628; }
+.toc-toggle:hover { color: #1d1d1f; }
+.toc-icon { flex-shrink: 0; }
+.toc.collapsed .toc-label { display: none; }
+.toc.collapsed .toc-toggle { justify-content: center; padding-left: 0; padding-right: 0; }
 
 .toc-title {
-  padding: 0.3rem 1rem 0.8rem;
-  color: #0A1628;
-  font-size: 14px;
-  font-weight: 600;
-  border-bottom: 1px solid #E2E8F0;
-  margin-bottom: 0.5rem;
+  display: none;
 }
 
 .toc-link {
   display: block;
-  padding: 0.25rem 1rem;
-  color: #64748B;
+  padding: 0.4rem 1.5rem;
+  color: #86868b;
   text-decoration: none;
-  font-size: 13px;
-  border-left: 2px solid transparent;
+  font-size: 15px;
+  border-left: 3px solid transparent;
   transition: all 0.15s;
+  line-height: 1.4;
 }
-.toc-link:hover { color: #1E293B; background: #F8FAFC; }
-.toc-link.active { color: #3B82F6; border-left-color: #3B82F6; background: #F8FAFC; }
-.toc-h2 { padding-left: 1.6rem; }
-.toc-h3 { padding-left: 2.2rem; font-size: 12px; }
+.toc-link:hover { color: #1d1d1f; }
+.toc-link.active { color: #1d1d1f; font-weight: 600; border-left-color: #1d1d1f; }
+.toc-h2 { padding-left: 2rem; font-size: 15px; }
+.toc-h3 { padding-left: 2.5rem; font-size: 14px; }
 
 @media (max-width: 1100px) {
   .toc { transform: translateX(-100%); }
   .toc.open { transform: translateX(0); }
-  .toc-toggle { position: fixed; top: 0.5rem; left: 0.5rem; z-index: 101; background: #FFFFFF; border: 1px solid #E2E8F0; border-radius: 4px; padding: 0.3rem 0.6rem; }
+  .toc-toggle { position: fixed; top: 0.5rem; left: 0.5rem; z-index: 101; background: #fff; border: 1px solid #d2d2d7; border-radius: 8px; padding: 0.4rem 0.75rem; font-size: 13px; box-shadow: 0 1px 3px rgba(0,0,0,0.08); }
   .container.has-toc { margin-left: auto; }
 }
 
 /* --- Blocks --- */
-.block { margin-bottom: 2.5rem; }
+.block { margin-bottom: 3rem; }
 
 .block-header {
-  background: #F8FAFC;
-  color: #1E293B;
+  background: #f5f5f7;
+  color: #1d1d1f;
   padding: 0.4rem 0.8rem;
   font-size: 12px;
   font-weight: 600;
   letter-spacing: 0.02em;
-  border-bottom: 1px solid #E2E8F0;
+  border-bottom: 1px solid #d2d2d7;
 }
 
 .content { padding: 0.5rem 0; }
 
 /* --- Headers --- */
-h1, h2, h3 { position: relative; font-weight: 600; }
-h1 { color: #0A1628; font-size: 30px; margin: 1.5rem 0 0.75rem; padding-left: 0; }
-h2 { color: #3B82F6; font-size: 24px; margin: 1.25rem 0 0.5rem; padding-left: 0; }
-h3 { color: #334155; font-size: 20px; margin: 1rem 0 0.4rem; padding-left: 0; }
+h1, h2, h3 { position: relative; font-weight: 700; color: #1d1d1f; letter-spacing: -0.005em; }
+h1 { font-size: 40px; line-height: 1.1; margin: 2.5rem 0 0.25rem; padding-left: 0; }
+h2 { font-size: 32px; line-height: 1.125; margin: 2.5rem 0 0.15rem; padding-left: 0; }
+h3 { font-size: 24px; line-height: 1.16667; margin: 2rem 0 0.1rem; padding-left: 0; }
 
 .anchor {
   position: absolute;
   left: -1.2em;
-  color: #E2E8F0;
+  color: #d2d2d7;
   text-decoration: none;
   font-size: 0.6em;
   top: 0.35em;
@@ -1411,15 +1403,15 @@ h3 { color: #334155; font-size: 20px; margin: 1rem 0 0.4rem; padding-left: 0; }
   transition: opacity 0.15s;
 }
 h1:hover .anchor, h2:hover .anchor, h3:hover .anchor { opacity: 1; }
-.anchor:hover { color: #3B82F6; }
+.anchor:hover { color: #06c; }
 
-p { margin: 0.4rem 0; }
+p { margin: 1em 0; }
 
-strong { color: #0A1628; font-weight: 600; }
+strong { color: #1d1d1f; font-weight: 600; }
 em { font-weight: 600; font-style: normal; }
 
 /* --- Links --- */
-a { color: #3B82F6; text-decoration: none; position: relative; }
+a { color: #06c; text-decoration: none; position: relative; }
 a:hover { text-decoration: underline; }
 a[target="_blank"] .ext-icon {
   font-size: 0.65em;
@@ -1433,8 +1425,8 @@ a[target="_blank"]:hover::after {
   position: absolute;
   bottom: 100%;
   left: 0;
-  background: #1E293B;
-  color: #FFFFFF;
+  background: #1d1d1f;
+  color: #fff;
   padding: 0.25rem 0.5rem;
   border-radius: 4px;
   font-size: 12px;
@@ -1448,87 +1440,84 @@ a[target="_blank"]:hover::after {
 }
 
 code.inline {
-  font-family: 'JetBrains Mono', monospace;
-  color: #334155;
-  background: #F8FAFC;
-  border: 1px solid #E2E8F0;
-  padding: 0.1rem 0.35rem;
-  border-radius: 3px;
+  font-family: 'SF Mono', SFMono-Regular, ui-monospace, Menlo, monospace;
+  color: #1d1d1f;
+  background: #f5f5f7;
+  border: none;
+  padding: 0.15rem 0.4rem;
+  border-radius: 4px;
   font-size: 0.875em;
 }
 
 /* --- Code blocks --- */
 .code-block {
-  margin: 1rem 0;
-  border: 1px solid #E2E8F0;
-  border-radius: 6px;
+  margin: 1.5rem 0;
+  border: none;
+  border-radius: 12px;
   overflow-x: auto;
   position: relative;
-  background: #F8FAFC;
+  background: #f5f5f7;
 }
 
 .code-block .code-lang {
-  display: inline-block;
-  padding: 0.2rem 0.6rem;
-  color: #64748B;
-  font-size: 12px;
-  font-weight: 600;
-  letter-spacing: 0.02em;
-  border-bottom: 1px solid #E2E8F0;
+  display: none;
 }
 
 .copy-btn {
   position: absolute;
-  top: 0.4rem;
-  right: 0.5rem;
-  background: #FFFFFF;
-  color: #64748B;
-  border: 1px solid #E2E8F0;
-  border-radius: 4px;
-  padding: 0.2rem 0.5rem;
-  font-size: 12px;
+  top: 0.75rem;
+  right: 0.75rem;
+  background: #fff;
+  color: #1d1d1f;
+  border: none;
+  border-radius: 6px;
+  padding: 0.35rem 0.75rem;
+  font-size: 13px;
+  font-weight: 500;
+  font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Helvetica Neue', sans-serif;
   cursor: pointer;
   opacity: 0;
   transition: opacity 0.15s;
   z-index: 2;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.08);
 }
 .code-block:hover .copy-btn { opacity: 1; }
-.copy-btn:hover { color: #0A1628; border-color: #64748B; }
-.copy-btn.copied { color: #10B981; border-color: #10B981; }
+.copy-btn:hover { background: #e8e8ed; }
+.copy-btn.copied { color: #06c; }
 
 .code-block pre {
   margin: 0;
-  padding: 0.75rem 1rem;
+  padding: 1.25rem 1.5rem;
   overflow-x: auto;
-  font-family: 'JetBrains Mono', monospace;
+  font-family: 'SF Mono', SFMono-Regular, ui-monospace, Menlo, monospace;
 }
 
 .code-block code {
-  font-family: 'JetBrains Mono', monospace;
+  font-family: 'SF Mono', SFMono-Regular, ui-monospace, Menlo, monospace;
   font-size: 14px;
 }
 .code-block pre code.hljs { background: transparent; padding: 0; }
 
 /* --- Diff --- */
-.diff { margin: 0.75rem 0; font-family: 'JetBrains Mono', monospace; font-size: 14px; }
+.diff { margin: 0.75rem 0; font-family: 'SF Mono', SFMono-Regular, ui-monospace, Menlo, monospace; font-size: 14px; }
 
-.diff-hunk { margin-bottom: 0.75rem; border: 1px solid #E2E8F0; border-radius: 6px; overflow: hidden; }
+.diff-hunk { margin-bottom: 0.75rem; border: 1px solid #d2d2d7; border-radius: 6px; overflow: hidden; }
 
 .diff-hunk-header {
-  background: #F8FAFC;
+  background: #f5f5f7;
   padding: 0.35rem 0.75rem;
   cursor: pointer;
   user-select: none;
   font-size: 12px;
-  font-family: 'Inter', sans-serif;
-  color: #64748B;
-  border-bottom: 1px solid #E2E8F0;
+  font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Helvetica Neue', sans-serif;
+  color: #6e6e73;
+  border-bottom: 1px solid #d2d2d7;
 }
-.diff-hunk-header:hover { color: #1E293B; }
+.diff-hunk-header:hover { color: #1d1d1f; }
 .diff-hunk-toggle { display: inline-block; transition: transform 0.15s; font-size: 10px; margin-right: 0.3rem; }
 .diff-hunk.collapsed .diff-hunk-toggle { transform: rotate(-90deg); }
 .diff-hunk.collapsed .diff-hunk-body { display: none; }
-.diff-hunk-range { color: #64748B; font-size: 11px; }
+.diff-hunk-range { color: #6e6e73; font-size: 11px; }
 
 .diff-table {
   width: 100%;
@@ -1540,13 +1529,13 @@ code.inline {
 
 .diff-table tr { border-bottom: none; }
 .diff-num {
-  color: #64748B;
+  color: #6e6e73;
   text-align: right;
   padding: 0 0.4rem;
   font-size: 12px;
   user-select: none;
   vertical-align: top;
-  background: #F8FAFC;
+  background: #f5f5f7;
 }
 .diff-code {
   padding: 0 0.5rem;
@@ -1557,9 +1546,9 @@ code.inline {
 
 .diff-cell-removed { background: #FEF2F2; }
 .diff-cell-added { background: #F0FDF4; }
-.diff-cell-empty { background: #FFFFFF; }
+.diff-cell-empty { background: #fff; }
 .diff-row-context td { background: transparent; }
-.diff-row-context .diff-code { color: #64748B; }
+.diff-row-context .diff-code { color: #6e6e73; }
 
 .diff-cell-removed .diff-num { background: #FEE2E2; color: #EF4444; }
 .diff-cell-added .diff-num { background: #DCFCE7; color: #10B981; }
@@ -1570,8 +1559,8 @@ code.inline {
 /* --- Tables --- */
 .table-scroll {
   overflow-x: auto;
-  margin: 1rem 0;
-  border: 1px solid #E2E8F0;
+  margin: 1.5rem 0;
+  border: 1px solid #d2d2d7;
   border-radius: 6px;
 }
 
@@ -1581,13 +1570,13 @@ table {
   min-width: 100%;
 }
 th, td {
-  border: 1px solid #E2E8F0;
+  border: 1px solid #d2d2d7;
   padding: 0.4rem 0.75rem;
   text-align: left;
 }
 th {
-  background: #F8FAFC;
-  color: #1E293B;
+  background: #f5f5f7;
+  color: #1d1d1f;
   font-weight: 600;
   font-size: 13px;
 }
@@ -1596,25 +1585,25 @@ th {
   user-select: none;
   white-space: nowrap;
 }
-.sortable-th:hover { background: #E2E8F0; }
-.sort-icon { font-size: 0.7em; color: #E2E8F0; margin-left: 0.3em; }
-.sortable-th.asc .sort-icon { color: #3B82F6; }
-.sortable-th.desc .sort-icon { color: #3B82F6; }
+.sortable-th:hover { background: #e8e8ed; }
+.sort-icon { font-size: 0.7em; color: #d2d2d7; margin-left: 0.3em; }
+.sortable-th.asc .sort-icon { color: #06c; }
+.sortable-th.desc .sort-icon { color: #06c; }
 
 /* --- Images --- */
 .img-wrapper {
-  margin: 1rem 0;
+  margin: 1.5rem 0;
 }
 .img-wrapper img {
   max-width: 100%;
   border-radius: 6px;
-  border: 1px solid #E2E8F0;
+  border: 1px solid #d2d2d7;
   cursor: pointer;
   transition: max-width 0.2s;
 }
 .img-wrapper img.expanded { max-width: none; }
 .img-caption {
-  color: #64748B;
+  color: #6e6e73;
   font-size: 12px;
   margin-top: 0.3rem;
 }
@@ -1627,28 +1616,28 @@ th {
 /* --- Lists --- */
 .list-item {
   padding-left: 1.5rem;
-  margin: 0.2rem 0;
+  margin: 0.5em 0;
 }
 .list-item.nested { padding-left: 3rem; }
-.bullet { color: #3B82F6; }
-.list-num { color: #3B82F6; font-weight: 600; }
+.bullet { color: #1d1d1f; }
+.list-num { color: #1d1d1f; font-weight: 600; }
 
 /* --- Line numbers --- */
 .line-num {
-  color: #64748B;
+  color: #6e6e73;
   display: inline-block;
   min-width: 3em;
   text-align: right;
   padding-right: 0.8em;
   user-select: none;
   font-size: 12px;
-  font-family: 'JetBrains Mono', monospace;
+  font-family: 'SF Mono', SFMono-Regular, ui-monospace, Menlo, monospace;
 }
 
 hr {
   border: none;
-  border-top: 1px solid #E2E8F0;
-  margin: 1.5rem 0;
+  border-top: 1px solid #d2d2d7;
+  margin: 2rem 0;
 }
 
 br { display: block; content: ""; margin: 0.3rem 0; }
@@ -1660,7 +1649,7 @@ br { display: block; content: ""; margin: 0.3rem 0; }
   left: 0;
   width: 100%;
   height: 100%;
-  background: rgba(10,22,40,0.2);
+  background: rgba(0,0,0,0.1);
   z-index: 200;
   display: flex;
   flex-direction: column;
@@ -1670,8 +1659,8 @@ br { display: block; content: ""; margin: 0.3rem 0; }
 .search-overlay.hidden { display: none; }
 
 .search-box {
-  background: #FFFFFF;
-  border: 1px solid #E2E8F0;
+  background: #fff;
+  border: 1px solid #d2d2d7;
   border-radius: 8px;
   width: 560px;
   max-width: 90vw;
@@ -1682,23 +1671,23 @@ br { display: block; content: ""; margin: 0.3rem 0; }
   width: 100%;
   background: transparent;
   border: none;
-  color: #0A1628;
-  font-family: 'Inter', sans-serif;
-  font-size: 16px;
+  color: #1d1d1f;
+  font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Helvetica Neue', sans-serif;
+  font-size: 17px;
   outline: none;
 }
-.search-box input::placeholder { color: #64748B; }
+.search-box input::placeholder { color: #86868b; }
 .search-meta {
   display: flex;
   justify-content: space-between;
   font-size: 12px;
-  color: #64748B;
+  color: #6e6e73;
   margin-top: 0.3rem;
 }
 
 .search-results {
-  background: #FFFFFF;
-  border: 1px solid #E2E8F0;
+  background: #fff;
+  border: 1px solid #d2d2d7;
   border-radius: 8px;
   width: 560px;
   max-width: 90vw;
@@ -1712,34 +1701,34 @@ br { display: block; content: ""; margin: 0.3rem 0; }
 .search-result {
   padding: 0.5rem 1rem;
   cursor: pointer;
-  border-bottom: 1px solid #F8FAFC;
+  border-bottom: 1px solid #e8e8ed;
   font-size: 14px;
 }
-.search-result:hover, .search-result.active { background: #F8FAFC; }
-.search-result .sr-context { color: #64748B; font-size: 12px; }
-.search-result mark { background: #DBEAFE; color: #0A1628; border-radius: 2px; padding: 0 2px; }
+.search-result:hover, .search-result.active { background: #f5f5f7; }
+.search-result .sr-context { color: #6e6e73; font-size: 12px; }
+.search-result mark { background: #ffd60a; color: #1d1d1f; border-radius: 2px; padding: 0 2px; }
 
 /* Highlight in page */
-.search-highlight { background: #DBEAFE; border-radius: 2px; }
+.search-highlight { background: #ffd60a; border-radius: 2px; }
 
 /* --- CSV --- */
 .csv-meta {
-  color: #64748B;
+  color: #6e6e73;
   font-size: 13px;
   margin-bottom: 0.5rem;
-  font-family: 'JetBrains Mono', monospace;
+  font-family: 'SF Mono', SFMono-Regular, ui-monospace, Menlo, monospace;
 }
 .csv-row-count {
-  color: #64748B;
+  color: #6e6e73;
   font-size: 12px;
   margin-bottom: 0.5rem;
 }
 .csv-chart {
   margin: 1rem 0;
-  border: 1px solid #E2E8F0;
+  border: 1px solid #d2d2d7;
   border-radius: 6px;
   padding: 1rem;
-  background: #FFFFFF;
+  background: #fff;
 }
 .csv-svg {
   width: 100%;
@@ -1748,22 +1737,22 @@ br { display: block; content: ""; margin: 0.3rem 0; }
 }
 .csv-table .filter-row th {
   padding: 0.3rem 0.4rem;
-  background: #FFFFFF;
-  border-bottom: 1px solid #E2E8F0;
+  background: #fff;
+  border-bottom: 1px solid #d2d2d7;
 }
 .col-filter {
   width: 100%;
   padding: 0.25rem 0.4rem;
   font-size: 12px;
-  font-family: 'Inter', sans-serif;
-  border: 1px solid #E2E8F0;
+  font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Helvetica Neue', sans-serif;
+  border: 1px solid #d2d2d7;
   border-radius: 3px;
-  background: #F8FAFC;
-  color: #0A1628;
+  background: #f5f5f7;
+  color: #1d1d1f;
   outline: none;
   box-sizing: border-box;
 }
-.col-filter:focus { border-color: #3B82F6; }
+.col-filter:focus { border-color: #06c; }
 
 /* --- Transcript --- */
 .transcript {
@@ -1774,8 +1763,8 @@ br { display: block; content: ""; margin: 0.3rem 0; }
 .transcript-header {
   position: sticky;
   top: 0;
-  background: #FFFFFF;
-  border-bottom: 1px solid #E2E8F0;
+  background: #fff;
+  border-bottom: 1px solid #d2d2d7;
   padding: 0.75rem 0;
   margin-bottom: 1.5rem;
   z-index: 50;
@@ -1786,34 +1775,34 @@ br { display: block; content: ""; margin: 0.3rem 0; }
 .transcript-title {
   font-size: 14px;
   font-weight: 600;
-  color: #0A1628;
+  color: #1d1d1f;
 }
 .transcript-meta {
   font-size: 12px;
-  color: #64748B;
-  font-family: 'JetBrains Mono', monospace;
+  color: #6e6e73;
+  font-family: 'SF Mono', SFMono-Regular, ui-monospace, Menlo, monospace;
 }
 .turn {
   margin-bottom: 1.5rem;
   padding-bottom: 1.5rem;
-  border-bottom: 1px solid #F1F5F9;
+  border-bottom: 1px solid #e8e8ed;
 }
 .turn:last-child { border-bottom: none; }
 .turn-gutter {
-  color: #64748B;
+  color: #6e6e73;
   font-size: 12px;
-  font-family: 'JetBrains Mono', monospace;
+  font-family: 'SF Mono', SFMono-Regular, ui-monospace, Menlo, monospace;
   margin-bottom: 0.5rem;
 }
 .turn-user {
-  background: #1E293B;
-  color: #F8FAFC;
+  background: #f5f5f7;
+  color: #1d1d1f;
   padding: 0.75rem 1rem;
   border-radius: 6px;
   margin-bottom: 0.75rem;
 }
 .turn-user pre {
-  font-family: 'JetBrains Mono', monospace;
+  font-family: 'SF Mono', SFMono-Regular, ui-monospace, Menlo, monospace;
   font-size: 14px;
   white-space: pre-wrap;
   word-break: break-word;
@@ -1830,30 +1819,30 @@ br { display: block; content: ""; margin: 0.3rem 0; }
 }
 .turn-diff-header {
   font-size: 12px;
-  color: #64748B;
-  font-family: 'JetBrains Mono', monospace;
+  color: #6e6e73;
+  font-family: 'SF Mono', SFMono-Regular, ui-monospace, Menlo, monospace;
   margin-bottom: 0.25rem;
 }
 .turn-tool {
   margin: 0.5rem 0;
-  border-left: 3px solid #E2E8F0;
+  border-left: 3px solid #d2d2d7;
   padding-left: 0.75rem;
 }
 .turn-tool summary {
   font-size: 13px;
-  color: #64748B;
+  color: #6e6e73;
   cursor: pointer;
-  font-family: 'JetBrains Mono', monospace;
+  font-family: 'SF Mono', SFMono-Regular, ui-monospace, Menlo, monospace;
   padding: 0.25rem 0;
 }
-.turn-tool summary:hover { color: #1E293B; }
+.turn-tool summary:hover { color: #1d1d1f; }
 .turn-tool pre {
-  font-family: 'JetBrains Mono', monospace;
+  font-family: 'SF Mono', SFMono-Regular, ui-monospace, Menlo, monospace;
   font-size: 13px;
   white-space: pre-wrap;
   word-break: break-word;
-  color: #334155;
-  background: #F8FAFC;
+  color: #1d1d1f;
+  background: #f5f5f7;
   padding: 0.5rem 0.75rem;
   border-radius: 4px;
   margin-top: 0.25rem;
@@ -1861,19 +1850,19 @@ br { display: block; content: ""; margin: 0.3rem 0; }
   overflow-y: auto;
 }
 .turn-question {
-  background: #FFFBEB;
-  border: 1px solid #FDE68A;
+  background: #f5f5f7;
+  border: 1px solid #d2d2d7;
   border-radius: 6px;
   padding: 0.75rem 1rem;
   margin: 0.5rem 0;
 }
 .turn-question pre {
-  font-family: 'JetBrains Mono', monospace;
+  font-family: 'SF Mono', SFMono-Regular, ui-monospace, Menlo, monospace;
   font-size: 14px;
   white-space: pre-wrap;
   word-break: break-word;
   margin: 0;
-  color: #92400E;
+  color: #1d1d1f;
   background: transparent;
 }
 `
@@ -1930,7 +1919,7 @@ func RenderStaticHTMLPage(title string, blocks []Block, showLineNums bool) strin
 		// TOC sidebar
 		if len(headers) > 1 {
 			sb.WriteString("<nav id=\"toc\" class=\"toc\">\n")
-			sb.WriteString("<div class=\"toc-toggle\" onclick=\"document.getElementById('toc').classList.toggle('collapsed')\" title=\"Toggle TOC\">&#9776;</div>\n")
+			sb.WriteString("<div class=\"toc-toggle\" onclick=\"document.getElementById('toc').classList.toggle('collapsed')\" title=\"Toggle TOC\"><svg class=\"toc-icon\" width=\"16\" height=\"16\" viewBox=\"0 0 16 16\" fill=\"none\"><line x1=\"1\" y1=\"3\" x2=\"15\" y2=\"3\" stroke=\"currentColor\" stroke-width=\"1.5\" stroke-linecap=\"round\"/><line x1=\"1\" y1=\"8\" x2=\"11\" y2=\"8\" stroke=\"currentColor\" stroke-width=\"1.5\" stroke-linecap=\"round\"/><line x1=\"1\" y1=\"13\" x2=\"13\" y2=\"13\" stroke=\"currentColor\" stroke-width=\"1.5\" stroke-linecap=\"round\"/></svg><span class=\"toc-label\">Contents</span></div>\n")
 			sb.WriteString("<div class=\"toc-content\">\n")
 			sb.WriteString(fmt.Sprintf("<div class=\"toc-title\">%s</div>\n", html.EscapeString(title)))
 			for _, h := range headers {
@@ -1987,10 +1976,10 @@ function copyCode(btn) {
   var text = code.textContent || code.innerText;
   navigator.clipboard.writeText(text).then(function() {
     btn.classList.add('copied');
-    btn.innerHTML = '&#x2713;';
+    btn.textContent = 'Copied';
     setTimeout(function() {
       btn.classList.remove('copied');
-      btn.innerHTML = '&#x2398;';
+      btn.textContent = 'Copy';
     }, 1500);
   });
 }
@@ -2269,10 +2258,10 @@ function copyCode(btn) {
   var text = code.textContent || code.innerText;
   navigator.clipboard.writeText(text).then(function() {
     btn.classList.add('copied');
-    btn.innerHTML = '&#x2713;';
+    btn.textContent = 'Copied';
     setTimeout(function() {
       btn.classList.remove('copied');
-      btn.innerHTML = '&#x2398;';
+      btn.textContent = 'Copy';
     }, 1500);
   });
 }
