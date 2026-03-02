@@ -60,9 +60,9 @@ func (p *TxtParser) Parse(content string) []Block {
 			}
 
 			currentBlock = &Block{
-				Name:       command,
-				LineNum:    blockNum,
-				SourceType: SourceShell,
+				Name:        command,
+				LineNum:     blockNum,
+				ContentType: BlockContentShell,
 			}
 			// Start content with command line (skip "shell" line)
 			if i+1 < len(lines) {
@@ -93,9 +93,9 @@ func (p *TxtParser) Parse(content string) []Block {
 			}
 
 			currentBlock = &Block{
-				Name:       name,
-				LineNum:    blockNum,
-				SourceType: SourceShell,
+				Name:        name,
+				LineNum:     blockNum,
+				ContentType: BlockContentShell,
 			}
 			currentLines = []string{line}
 		} else if currentBlock != nil {
@@ -105,9 +105,9 @@ func (p *TxtParser) Parse(content string) []Block {
 			if strings.TrimSpace(line) != "" {
 				blockNum++
 				currentBlock = &Block{
-					Name:       "Output",
-					LineNum:    blockNum,
-					SourceType: SourceShell,
+					Name:        "Output",
+					LineNum:     blockNum,
+					ContentType: BlockContentShell,
 				}
 				currentLines = []string{line}
 			}
@@ -127,12 +127,12 @@ func (p *TxtParser) Parse(content string) []Block {
 	if len(blocks) == 0 && strings.TrimSpace(content) != "" {
 		allLines := strings.Split(content, "\n")
 		blocks = append(blocks, Block{
-			Name:       "Output",
-			Content:    content,
-			LineNum:    1,
-			Pages:      splitIntoPages(allLines, LinesPerPage),
-			TotalPages: len(splitIntoPages(allLines, LinesPerPage)),
-			SourceType: SourceShell,
+			Name:        "Output",
+			Content:     content,
+			LineNum:     1,
+			Pages:       splitIntoPages(allLines, LinesPerPage),
+			TotalPages:  len(splitIntoPages(allLines, LinesPerPage)),
+			ContentType: BlockContentShell,
 		})
 	}
 

@@ -68,7 +68,6 @@ func (p *TodoParser) Parse(content string) []Block {
 			Pages:       []string{blockContent},
 			TotalPages:  1,
 			ContentType: BlockContentPlain,
-			SourceType:  SourceOther,
 		},
 	}
 }

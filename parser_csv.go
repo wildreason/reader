@@ -49,7 +49,6 @@ func (p *CsvParser) Parse(content string) []Block {
 		Pages:       []string{mdTable},
 		TotalPages:  1,
 		ContentType: BlockContentCSV,
-		CsvRecords:  records,
 		Data:        &CsvData{Records: records},
 	}}
 }

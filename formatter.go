@@ -244,14 +244,14 @@ func FormatBlockPage(block *Block, pageNum int, termWidth int, borderStyle Borde
 		displayName = block.PageMeta[pageNum]
 	}
 
-	// Add source type prefix with color
-	if block.SourceType == SourceChat {
+	// Add content type prefix with color
+	if block.ContentType == BlockContentTranscript {
 		// Extract just the block number from "block-N" format
 		blockNum := strings.TrimPrefix(displayName, "block-")
 		if blockNum != displayName { // It was a block-N format
 			displayName = "[#b294bb]chat[-] [#808080]" + blockNum + "[-]"
 		}
-	} else if block.SourceType == SourceShell {
+	} else if block.ContentType == BlockContentShell {
 		displayName = "[#99b494]shell[-]"
 	}
 
@@ -272,7 +272,7 @@ func FormatBlockPage(block *Block, pageNum int, termWidth int, borderStyle Borde
 		}
 	} else {
 		// Non-box styles: render header (with background highlight only for markdown)
-		if block.SourceType == SourceMarkdown {
+		if block.ContentType != BlockContentTranscript && block.ContentType != BlockContentShell {
 			// Markdown blocks: gray background highlight
 			if block.TotalPages > 1 {
 				// Right-align page indicator

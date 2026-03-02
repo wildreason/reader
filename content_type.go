@@ -21,6 +21,7 @@ const (
 	BlockContentVideo
 	BlockContentContract
 	BlockContentTranscript
+	BlockContentShell
 )
 
 // String returns a human-readable name for the content type
@@ -48,6 +49,8 @@ func (ct BlockContentType) String() string {
 		return "contract"
 	case BlockContentTranscript:
 		return "transcript"
+	case BlockContentShell:
+		return "shell"
 	default:
 		return "plain"
 	}

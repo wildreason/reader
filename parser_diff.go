@@ -28,7 +28,6 @@ func (p *DiffParser) Parse(content string) []Block {
 				Pages:       []string{content},
 				TotalPages:  1,
 				ContentType: BlockContentPlain,
-				SourceType:  SourceOther,
 			},
 		}
 	}
@@ -47,8 +46,7 @@ func (p *DiffParser) Parse(content string) []Block {
 				TotalPages:  1,
 				ContentType: BlockContentDiff,
 				PageTypes:   []BlockContentType{BlockContentDiff},
-				SourceType:  SourceOther,
-			},
+				},
 		}
 	}
 
@@ -77,7 +75,6 @@ func (p *DiffParser) Parse(content string) []Block {
 			TotalPages:  len(hunks),
 			ContentType: BlockContentDiff,
 			PageTypes:   pageTypes,
-			SourceType:  SourceOther,
 		},
 	}
 }

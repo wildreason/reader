@@ -4,16 +4,6 @@ import (
 	"strings"
 )
 
-// SourceType identifies which parser created this block
-type SourceType string
-
-const (
-	SourceMarkdown SourceType = "markdown"
-	SourceChat     SourceType = "chat"
-	SourceShell    SourceType = "shell"
-	SourceOther    SourceType = ""
-)
-
 // Parser interface for extensibility - allows different file formats
 type Parser interface {
 	Parse(content string) []Block
@@ -36,10 +26,7 @@ type Block struct {
 	ContentType BlockContentType   // Default content type (for simple blocks)
 	PageTypes   []BlockContentType // Per-page content type (for mixed content blocks)
 	PageMeta      []string           // Per-page metadata (e.g., filename for diff pages)
-	SourceType    SourceType         // Track which parser created this block
-	TurnParts     []TurnPart         // Structured conversation parts for web rendering
 	PageStartLine []int             // 1-indexed file line number for first content line of each page
-	CsvRecords    [][]string        // Raw CSV records (header + data rows) for structured rendering
 	Data          interface{}        // Typed payload: *ImageData, *VideoData, *CsvData, etc.
 }
 
@@ -223,7 +210,6 @@ func createBlock(header string, contentLines []string, lineNum int) Block {
 		Pages:         pages,
 		TotalPages:    len(pages),
 		ContentType:   contentType,
-		SourceType:    SourceMarkdown,
 		PageStartLine: pageStartLine,
 	}
 }
