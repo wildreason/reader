@@ -32,6 +32,9 @@ var exportHTML bool
 // shareFlag opens rendered HTML in the default browser
 var shareFlag bool
 
+// terminalFlag forces terminal TUI rendering (-t with no type argument)
+var terminalFlag bool
+
 // outputHTML prints HTML to stdout, or writes to a temp file and opens in browser if --share is set.
 func outputHTML(html string) {
 	if !shareFlag {
@@ -48,7 +51,7 @@ func outputHTML(html string) {
 		os.Exit(1)
 	}
 	f.Close()
-	fmt.Fprintf(os.Stderr, "Opening %s\n", f.Name())
+	fmt.Fprintf(os.Stderr, "Opened in your browser.\n")
 	exec.Command("open", f.Name()).Start()
 }
 
@@ -450,7 +453,7 @@ func viewTextFile(filePath string, forceType string, follow bool) {
 	}
 	content, err := os.ReadFile(filePath)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "Error: Could not read file '%s': %v\n", filePath, err)
+		fmt.Fprintf(os.Stderr, "Could not find %s\n", filePath)
 		os.Exit(1)
 	}
 	fileContent := string(content)
@@ -635,19 +638,20 @@ func viewStdinContent(content string, forceType string) {
 func printUsage() {
 	w := os.Stderr
 	fmt.Fprintln(w)
-	fmt.Fprintln(w, "  Read any file in the terminal, rendered.")
+	fmt.Fprintln(w, "  Read any file, rendered in your browser.")
 	fmt.Fprintln(w)
 	fmt.Fprintln(w, "Usage:")
-	fmt.Fprintln(w, "  aster <file>          View file (auto-detect format)")
+	fmt.Fprintln(w, "  aster <file>          Open file in browser (default)")
+	fmt.Fprintln(w, "  aster <file> -t       View file in terminal")
 	fmt.Fprintln(w, "  aster pick            Pick from recent files")
 	fmt.Fprintln(w, "  aster latest          Open newest file in current directory")
 	fmt.Fprintln(w)
 	fmt.Fprintln(w, "Flags:")
-	fmt.Fprintln(w, "  -n                    Show source file line numbers")
+	fmt.Fprintln(w, "  -t                    Render in terminal instead of browser")
 	fmt.Fprintln(w, "  -t TYPE               Force content type (md, json, jsonl, diff, txt, yaml, csv)")
+	fmt.Fprintln(w, "  -n                    Show source file line numbers")
 	fmt.Fprintln(w, "  --port N              Serve rendered HTML on localhost:N")
 	fmt.Fprintln(w, "  --html                Export self-contained HTML to stdout")
-	fmt.Fprintln(w, "  --share               Open rendered HTML in the browser")
 	fmt.Fprintln(w)
 	fmt.Fprintln(w, "Supported formats:")
 	fmt.Fprintln(w, "  Markdown        .md .markdown")
@@ -704,14 +708,13 @@ func main() {
 				os.Exit(1)
 			}
 			i++ // skip the port number
-		} else if args[i] == "-t" && i+1 < len(args) {
-			if validTypes[args[i+1]] {
+		} else if args[i] == "-t" {
+			if i+1 < len(args) && validTypes[args[i+1]] {
 				forceType = args[i+1]
+				i++ // skip the type value
 			} else {
-				fmt.Fprintf(os.Stderr, "Error: -t requires one of: md, json, jsonl, diff, txt, yaml\n")
-				os.Exit(1)
+				terminalFlag = true
 			}
-			i++ // skip the type value
 		} else {
 			cleanArgs = append(cleanArgs, args[i])
 		}
@@ -719,6 +722,12 @@ func main() {
 	os.Args = append([]string{os.Args[0]}, cleanArgs...)
 
 	if shareFlag {
+		exportHTML = true
+	}
+
+	// Default to browser if no output mode specified and not terminal mode
+	if !terminalFlag && !exportHTML && !shareFlag && servePort == 0 {
+		shareFlag = true
 		exportHTML = true
 	}
 
@@ -790,8 +799,7 @@ func main() {
 		return
 	}
 
-	fmt.Fprintln(os.Stderr, "Error: No file provided.")
-	fmt.Fprintln(os.Stderr, "Run 'aster help' for usage.")
+	fmt.Fprintln(os.Stderr, "No file provided. Run 'aster help' for usage.")
 	os.Exit(1)
 }
 

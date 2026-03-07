@@ -96,13 +96,14 @@ func videoMIME(ext string) string {
 	}
 }
 
-// serveHTML starts an HTTP server serving the rendered file
-func serveHTML(filePath string, blocks []Block, port int) {
+// serveHTMLAsync starts an HTTP server on the given port and returns an error
+// instead of calling os.Exit. The stopCh can be closed to signal shutdown.
+func serveHTMLAsync(filePath string, blocks []Block, port int, stopCh <-chan struct{}) error {
 	var (
-		mu           sync.RWMutex
-		currentHTML  string
-		broadcaster  = newSSEBroadcaster()
-		title        = filepath.Base(filePath)
+		mu          sync.RWMutex
+		currentHTML string
+		broadcaster = newSSEBroadcaster()
+		title       = filepath.Base(filePath)
 	)
 
 	// Extract frontmatter title if available (for single-block markdown)
@@ -120,15 +121,21 @@ func serveHTML(filePath string, blocks []Block, port int) {
 
 	// File watcher: re-parse + re-render on change, notify SSE clients
 	if filePath != "" && filePath != "stdin" {
-		stopCh := make(chan struct{})
-		defer close(stopCh)
+		watchStop := make(chan struct{})
+		go func() {
+			select {
+			case <-stopCh:
+				close(watchStop)
+			case <-watchStop:
+			}
+		}()
 
 		singleBlock := len(blocks) == 1
 		ct := BlockContentPlain
 		if singleBlock {
 			ct = blocks[0].ContentType
 		}
-		go watchAndRerender(filePath, title, singleBlock, ct, &mu, &currentHTML, broadcaster, stopCh)
+		go watchAndRerender(filePath, title, singleBlock, ct, &mu, &currentHTML, broadcaster, watchStop)
 	}
 
 	mux := http.NewServeMux()
@@ -200,10 +207,28 @@ func serveHTML(filePath string, blocks []Block, port int) {
 		}
 	})
 
-	addr := formatServerAddr(port)
-	fmt.Fprintf(os.Stderr, "Serving %s at http://localhost:%d\n", filePath, port)
+	server := &http.Server{
+		Addr:    formatServerAddr(port),
+		Handler: mux,
+	}
 
-	if err := http.ListenAndServe(addr, mux); err != nil {
+	// Shutdown when stopCh is closed
+	go func() {
+		<-stopCh
+		server.Close()
+	}()
+
+	fmt.Fprintf(os.Stderr, "Serving at http://localhost:%d\n", port)
+	return server.ListenAndServe()
+}
+
+// serveHTML starts an HTTP server serving the rendered file (blocking, exits on error)
+func serveHTML(filePath string, blocks []Block, port int) {
+	stopCh := make(chan struct{})
+	if err := serveHTMLAsync(filePath, blocks, port, stopCh); err != nil {
+		if err == http.ErrServerClosed {
+			return
+		}
 		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
 		os.Exit(1)
 	}
@@ -284,7 +309,7 @@ func serveDirectory(dirPath string, port int) {
 	go watchDirectory(dirPath, dirName, &mu, cache, &indexHTML, broadcaster)
 
 	addr := formatServerAddr(port)
-	fmt.Fprintf(os.Stderr, "Serving %s at http://localhost:%d\n", dirPath, port)
+	fmt.Fprintf(os.Stderr, "Serving at http://localhost:%d\n", port)
 
 	if err := http.ListenAndServe(addr, mux); err != nil {
 		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
