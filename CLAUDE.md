@@ -17,7 +17,7 @@ agent reads this                     human reads this
 ~/wild/sloane                        ~/wild/aster (becoming ~/wild/sloan)
 ```
 
-The rendering engine (v1/v2) is complete. Do not extend it. The product is v3: agent activity rendered through five primitives.
+The rendering engine (v1/v2) is complete. Do not extend it. v3 has two tracks: the five primitives classifier (what to show) and the mcp:// fetch layer (where to get it). aster is becoming curl for MCP — point it at any server, get rendered content.
 
 ## The Five Primitives
 
@@ -56,16 +56,34 @@ Sloan is a rendering and classification problem, not a web app problem. The syst
 - Web mode: SSE live reload, syntax highlighting, sortable tables, TOC, search
 - TUI mode: terminal rendering with colors and tables
 - Static export: `--html` self-contained output
+- Browser share: `--share` opens rendered HTML in default browser
 - Directory mode: doc index with frontmatter
 
 ## What to Build (product)
 
 | # | What | Why |
 |---|------|-----|
-| 1 | Activity classifier (LAP-006) | Five primitives filter — the product |
-| 2 | Hooks integration (LAP-007) | Real-time feed from Claude Code |
-| 3 | Manifest renderer | New parser: `parser_manifest.go` for JSON-LD from sloane |
-| 4 | Live streaming | `sloan --listen` for push-based agent feeds |
+| 1 | mcp:// registry resolver (LAP-009) | Auto-resolve any public MCP server by name — no config needed |
+| 2 | Activity classifier (LAP-006) | Five primitives filter — the product |
+| 3 | Hooks integration (LAP-007) | Real-time feed from Claude Code |
+| 4 | Manifest renderer | New parser: `parser_manifest.go` for JSON-LD from sloane |
+| 5 | Live streaming | `sloan --listen` for push-based agent feeds |
+
+## What's Built (mcp:// fetch layer — LAP-008)
+
+aster fetches content from remote MCP servers via `mcp://` URIs. The fetch layer sits in front of Parse — it resolves the server name, connects via MCP Streamable HTTP, fetches the resource, then feeds content into the existing []Block pipeline.
+
+```
+aster mcp://server/resource              # terminal
+aster mcp://server/resource --port 8080  # browser
+aster mcp://server/resource --html       # static HTML
+```
+
+Files: `mcp_uri.go` (parser), `mcp_resolver.go` (name resolution), `mcp_client.go` (MCP transport), `cmd/mcp-demo/` (test server).
+
+Resolution order: `~/.config/aster/servers.json` (local) -> MCP Registry (LAP-009, not yet wired).
+
+**Why this matters:** MCP has naming (registry), discovery (.well-known, in progress), and transport (Streamable HTTP) but no URI scheme connecting them. `mcp://` is the missing glue. 800 of 1000 registered servers have remote endpoints. The registry already returns endpoint URLs in `remotes[]`. Nobody wired it up as a runtime resolver — aster is the first client that does.
 
 ## What NOT to Build
 
@@ -73,24 +91,27 @@ Sloan is a rendering and classification problem, not a web app problem. The syst
 - TUI improvements (web is the output surface)
 - Directory mode features (static site generation is not the product)
 - LAP-003/004/005 — engine work, deprioritized
-- Anything that doesn't serve the five primitives
+- Auth token management (future — connects to Seal layer / usevault)
+- Modifying the MCP spec repo (read-only reference at ~/wild/mcp)
 
 ## Architecture
 
 ```
 Input sources:
+  mcp://server/resource          Current: fetch from remote MCP servers (LAP-008)
   Session transcripts (.jsonl)    Current: parse agent activity
   Manifest JSON-LD from sloane    Next: render structured file manifests
   Hooks (PostToolUse, Stop)       Planned: real-time push (LAP-007)
   Stream-JSON pipe (claude -p)    Future: live streaming
-  MCP traffic (proxy/sidecar)     Future: intercept agent-system calls
      |
      v
-Parse -> []Block -> Classify (five primitives) -> Render
-     |                                              |
-     +-- Web path:  server.go -> formatBlockHTML()   |
-     +-- TUI path:  reader.go -> formatter.go       |
-     +-- Static:    RenderStaticHTMLPage             |
+[Fetch] -> Parse -> []Block -> Classify (five primitives) -> Render
+  |                                                            |
+  +-- mcp:// resolve + MCP client (mcp_*.go)                   |
+                                                               |
+     +-- Web path:  server.go -> formatBlockHTML()              |
+     +-- TUI path:  reader.go -> formatter.go                  |
+     +-- Static:    RenderStaticHTMLPage                       |
      +-- Activity:  formatActivityFeedHTML() (LAP-006)
 ```
 
@@ -133,13 +154,15 @@ Shell alias: `alias as=aster`
 ## Commands
 
 ```
-aster <file>          View file (auto-detect format)
-aster <file> --port N Serve as HTML on localhost:N
-aster <file> --html   Static self-contained HTML to stdout
-aster <dir> --port N  Serve directory as web index
-aster session.jsonl   Render agent transcript as activity feed
-aster pick | p        Pick from recent files
-aster latest | l      Open newest file in cwd
+aster <file>               View file (auto-detect format)
+aster <file> --share       Open rendered HTML in the browser
+aster <file> --port N      Serve as HTML on localhost:N
+aster <file> --html        Static self-contained HTML to stdout
+aster <dir> --port N       Serve directory as web index
+aster session.jsonl        Render agent transcript as activity feed
+aster mcp://server/resource  Fetch and render from MCP server
+aster pick | p             Pick from recent files
+aster latest | l           Open newest file in cwd
 ```
 
 ## Brand
@@ -151,8 +174,8 @@ aster latest | l      Open newest file in cwd
 ## Release
 
 ```bash
-git tag v1.0.1
-git push origin v1.0.1
+git tag v1.0.4
+git push origin v1.0.4
 # GitHub Actions -> goreleaser -> GitHub Release + Homebrew tap
 ```
 
@@ -161,3 +184,4 @@ git push origin v1.0.1
 v1: File -> terminal (done)
 v2: File -> web (done)
 v3: Agent activity -> web (the product)
+v3+: mcp:// -> fetch -> render (curl of MCP — LAP-008 done, LAP-009 next)

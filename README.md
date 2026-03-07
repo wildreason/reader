@@ -1,80 +1,48 @@
 # aster
 
-The human interface for agent work. Renders any file as web or terminal.
-
-![aster](hero.png)
-
-Markdown, diffs, CSV, images, video, JSONL transcripts. One binary, auto-detected. Web-first with terminal fallback.
-
-## Install
+Read any file, rendered. Terminal or browser.
 
 ```bash
 brew install wildreason/tap/aster
 ```
 
-Or build from source:
-
-```bash
-git clone https://github.com/wildreason/reader.git
-cd reader
-make install
-```
-
 ## Usage
-
-### Web (primary)
-
-```bash
-aster readme.md --port 3000        # Serve as web page with live reload
-aster data.csv --port 3000         # Sortable, filterable table
-aster session.jsonl --port 3000    # Agent transcript as activity feed
-aster ~/docs/ --port 8080          # Directory -> web index with routing
-```
-
-Open in browser automatically:
-
-```bash
-aster readme.md --html > /tmp/doc.html && open /tmp/doc.html
-```
-
-### Terminal
 
 ```bash
 aster readme.md                    # Markdown with colors and tables
-aster changes.patch                # Diff with syntax highlighting
 aster screenshot.png               # Image inline (iTerm2, Kitty, WezTerm)
+aster changes.patch                # Diff with syntax highlighting
 aster data.csv                     # CSV as formatted table
+aster transcript.jsonl             # JSONL conversation viewer
 aster data.json                    # JSON with highlighting
-```
+aster server.log                   # Plain text
 
-### Shortcuts
-
-```bash
 aster pick                         # Choose from recently viewed files
 aster latest                       # Open newest file in cwd
 ```
 
-### Pipes
+Pipe support:
 
 ```bash
 git diff | aster
 curl -s api.example.com | aster
+cat log.jsonl | aster -t jsonl
 ```
 
-## Web features
+## Browser
 
-- Live reload -- file watcher pushes changes to browser via SSE
-- Syntax highlighting -- auto-detected language
-- Copy button on code blocks
-- Sortable tables -- click headers, numeric-aware
-- TOC sidebar -- scroll-spy navigation from headings
-- Search -- `/` or `Ctrl+K` for fuzzy search overlay
-- CSV filters -- per-column filter inputs, auto-charting for numeric data
-- Diff view -- side-by-side with word-level highlighting, collapsible hunks
-- Video player -- speed controls, keyboard shortcuts
-- Static export -- `--html` outputs self-contained HTML to stdout (no CDN, no server)
+```bash
+aster readme.md --share            # Open rendered HTML in browser
+aster readme.md --port 3000        # Serve with live reload
+aster data.csv --port 3000         # Sortable, filterable table
+aster session.jsonl --port 3000    # Agent transcript as activity feed
+aster ~/docs/ --port 8080          # Directory as web index
+aster readme.md --html > out.html  # Self-contained HTML to stdout
+```
 
-## Supported formats
+Web features: live reload (SSE), syntax highlighting, copy button on code blocks, sortable tables (numeric-aware), TOC sidebar with scroll-spy, search (`/` or `Ctrl+K`), CSV per-column filters, diff side-by-side with word-level highlighting, video player with speed controls.
+
+## Formats
 
 | Format | Extensions |
 |--------|-----------|
@@ -83,15 +51,17 @@ curl -s api.example.com | aster
 | Unified diffs | `.diff` `.patch` |
 | JSON | `.json` |
 | JSONL transcripts | `.jsonl` |
+| YAML | `.yaml` `.yml` |
 | Images | `.png` `.jpg` `.gif` `.webp` `.bmp` `.svg` |
 | Video | `.mp4` `.webm` `.mov` |
 | Plain text | `.txt` `.log` |
 
-Format is auto-detected from the file extension. Override with `-t TYPE`.
+Auto-detected from extension. Override with `-t TYPE`.
 
 ## Flags
 
 ```
+--share      Open rendered HTML in the default browser
 --port N     Serve as web page on localhost:N
 --html       Export self-contained HTML to stdout
 -t TYPE      Force content type (md, json, jsonl, diff, txt, yaml, csv)
@@ -101,15 +71,7 @@ Format is auto-detected from the file extension. Override with `-t TYPE`.
 
 ## Navigation
 
-### Web
-
-```
-/ or Ctrl+K     Search
-Esc             Close search
-Arrow keys      Navigate search results
-```
-
-### Terminal
+Terminal:
 
 ```
 j / k           Scroll down / up
@@ -121,57 +83,41 @@ q               Quit
 
 ## Examples
 
-### Git diffs in the browser
-
 ```bash
-# Uncommitted changes in one file
-git diff file.txt | as diff - --port 3000
+# Git diffs in browser
+git diff HEAD | aster --share
+git diff main..feature | aster --port 3000
 
-# Staged changes
-git diff --cached file.txt | as diff - --port 3000
+# Agent transcripts
+aster session.jsonl --share
 
-# All uncommitted changes (staged + unstaged)
-git diff HEAD | as diff - --port 3000
+# Static export
+git diff HEAD | aster --html > review.html
+aster data.csv --html > table.html
 
-# Compare branches
-git diff main..feature | as diff - --port 3000
+# Directory index
+aster ~/notes/ --port 8080
 ```
 
-### Agent transcripts
+## Install
+
+Homebrew:
 
 ```bash
-# Render a Claude Code session
-as session.jsonl --port 3000
+brew install wildreason/tap/aster
 ```
 
-### Static export
+Build from source:
 
 ```bash
-# Pipe any format to self-contained HTML
-git diff HEAD | as diff - --html > review.html
-as data.csv --html > table.html
+git clone https://github.com/wildreason/reader.git
+cd reader
+make install
 ```
 
-### Directory index
+Shell alias: `alias as=aster`
 
-```bash
-# Serve a folder of markdown as a docs site
-as ~/notes/ --port 8080
-```
-
-## Shell alias
-
-```bash
-alias as=aster
-```
-
-## Optional dependencies
-
-Terminal image rendering requires [chafa](https://hpjansson.org/chafa/):
-
-```bash
-brew install chafa
-```
+Terminal image rendering requires [chafa](https://hpjansson.org/chafa/): `brew install chafa`
 
 ## License
 
