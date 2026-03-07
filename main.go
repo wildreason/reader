@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 
@@ -27,6 +28,29 @@ var servePort int
 
 // exportHTML enables static HTML export to stdout (--html flag)
 var exportHTML bool
+
+// shareFlag opens rendered HTML in the default browser
+var shareFlag bool
+
+// outputHTML prints HTML to stdout, or writes to a temp file and opens in browser if --share is set.
+func outputHTML(html string) {
+	if !shareFlag {
+		fmt.Print(html)
+		return
+	}
+	f, err := os.CreateTemp("", "aster-*.html")
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Error creating temp file: %v\n", err)
+		os.Exit(1)
+	}
+	if _, err := f.WriteString(html); err != nil {
+		fmt.Fprintf(os.Stderr, "Error writing temp file: %v\n", err)
+		os.Exit(1)
+	}
+	f.Close()
+	fmt.Fprintf(os.Stderr, "Opening %s\n", f.Name())
+	exec.Command("open", f.Name()).Start()
+}
 
 // forceType overrides content type detection (-t TYPE flag)
 var forceType string
@@ -325,7 +349,7 @@ func viewFile(filePath string) {
 			}
 			if exportHTML {
 				title := filepath.Base(filePath)
-				fmt.Print(RenderStaticHTMLPage(title, blocks, false))
+				outputHTML(RenderStaticHTMLPage(title, blocks, false))
 				return
 			}
 			serveHTML(filePath, blocks, servePort)
@@ -346,7 +370,7 @@ func viewFile(filePath string) {
 			}
 			if exportHTML {
 				title := filepath.Base(filePath)
-				fmt.Print(RenderStaticHTMLPage(title, blocks, false))
+				outputHTML(RenderStaticHTMLPage(title, blocks, false))
 				return
 			}
 			serveHTML(filePath, blocks, servePort)
@@ -497,7 +521,7 @@ func viewTextFile(filePath string, forceType string, follow bool) {
 			blocks[0].Content = body
 			blocks[0].Pages = []string{body}
 		}
-		fmt.Print(RenderStaticHTMLPage(title, blocks, showLineNumbers))
+		outputHTML(RenderStaticHTMLPage(title, blocks, showLineNumbers))
 		return
 	}
 
@@ -595,7 +619,7 @@ func viewStdinContent(content string, forceType string) {
 
 	// Static HTML export
 	if exportHTML {
-		fmt.Print(RenderStaticHTMLPage("stdin", blocks, showLineNumbers))
+		outputHTML(RenderStaticHTMLPage("stdin", blocks, showLineNumbers))
 		return
 	}
 
@@ -623,6 +647,7 @@ func printUsage() {
 	fmt.Fprintln(w, "  -t TYPE               Force content type (md, json, jsonl, diff, txt, yaml, csv)")
 	fmt.Fprintln(w, "  --port N              Serve rendered HTML on localhost:N")
 	fmt.Fprintln(w, "  --html                Export self-contained HTML to stdout")
+	fmt.Fprintln(w, "  --share               Open rendered HTML in the browser")
 	fmt.Fprintln(w)
 	fmt.Fprintln(w, "Supported formats:")
 	fmt.Fprintln(w, "  Markdown        .md .markdown")
@@ -669,6 +694,8 @@ func main() {
 			showLineNumbers = true
 		} else if args[i] == "--html" {
 			exportHTML = true
+		} else if args[i] == "--share" {
+			shareFlag = true
 		} else if args[i] == "--port" && i+1 < len(args) {
 			if p, err := parsePositiveInt(args[i+1]); err == nil {
 				servePort = p
@@ -690,6 +717,10 @@ func main() {
 		}
 	}
 	os.Args = append([]string{os.Args[0]}, cleanArgs...)
+
+	if shareFlag {
+		exportHTML = true
+	}
 
 	// Check for subcommand or shortcut as first arg
 	if len(os.Args) >= 2 {
@@ -807,7 +838,7 @@ func runSubcommand(typeName string, ft fileType, args []string) {
 				os.Exit(1)
 			}
 			if exportHTML {
-				fmt.Print(RenderStaticHTMLPage(filepath.Base(filePath), blocks, false))
+				outputHTML(RenderStaticHTMLPage(filepath.Base(filePath), blocks, false))
 			} else {
 				serveHTML(filePath, blocks, servePort)
 			}
@@ -824,7 +855,7 @@ func runSubcommand(typeName string, ft fileType, args []string) {
 				os.Exit(1)
 			}
 			if exportHTML {
-				fmt.Print(RenderStaticHTMLPage(filepath.Base(filePath), blocks, false))
+				outputHTML(RenderStaticHTMLPage(filepath.Base(filePath), blocks, false))
 			} else {
 				serveHTML(filePath, blocks, servePort)
 			}
